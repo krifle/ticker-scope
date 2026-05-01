@@ -1,0 +1,10 @@
+prophet
+yfinance
+streamlit
+plotly
+pandas
+numpy
+holidays
+python-dotenv
+requests
+orjson
