@@ -114,6 +114,50 @@ class EventSyncTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(sync_runs["status"].tolist(), ["skipped", "success"])
 
+    def test_sync_earnings_events_cache_is_scoped_by_horizon(self) -> None:
+        external_events = pd.DataFrame(
+            [
+                {
+                    "ticker": "TSLA",
+                    "event_date": date(2026, 7, 22),
+                    "name": "TSLA earnings",
+                    "category": "earnings",
+                    "lower_window": -1,
+                    "upper_window": 1,
+                    "source": "alpha_vantage_earnings",
+                    "notes": "Provider: Alpha Vantage",
+                }
+            ]
+        )
+        client = FakeEarningsClient(external_events)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "ticker_scope.sqlite3"
+            with patch.dict("os.environ", {"TICKER_SCOPE_DB_PATH": str(db_path)}):
+                first = sync_earnings_events(
+                    "TSLA",
+                    horizon="3month",
+                    api_key="demo",
+                    client=client,
+                )
+                second = sync_earnings_events(
+                    "TSLA",
+                    horizon="6month",
+                    api_key="demo",
+                    client=client,
+                )
+                third = sync_earnings_events(
+                    "TSLA",
+                    horizon="6month",
+                    api_key="demo",
+                    client=client,
+                )
+
+        self.assertEqual(client.calls, 2)
+        self.assertFalse(first.from_cache)
+        self.assertFalse(second.from_cache)
+        self.assertTrue(third.from_cache)
+
 
 if __name__ == "__main__":
     unittest.main()

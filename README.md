@@ -15,6 +15,17 @@ streamlit run app.py
 
 브라우저에서 `http://localhost:8501`로 접속합니다.
 
+## 개발/테스트
+
+테스트와 커버리지 도구까지 설치하려면 개발 의존성을 사용합니다.
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -p 'test_*.py' -v
+python -m coverage run -m unittest discover -s tests -p 'test_*.py'
+python -m coverage report
+```
+
 ## 데이터 저장소
 
 앱은 `data/ticker_scope.sqlite3` SQLite DB를 로컬 저장소로 사용합니다. 가격 데이터가 필요할 때마다 `yfinance`를 새로 호출하지 않고, 먼저 DB에 저장된 데이터를 확인한 뒤 비어 있는 날짜 구간만 동기화합니다.

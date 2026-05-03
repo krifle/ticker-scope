@@ -49,6 +49,7 @@ def sync_earnings_events(
             connection,
             ticker=symbol,
             source=source,
+            period=horizon,
             min_refresh_hours=min_refresh_hours,
         ):
             message = f"skipped API call; latest successful sync is within {min_refresh_hours}h"
@@ -193,6 +194,7 @@ def _recent_success_exists(
     connection,
     ticker: str,
     source: str,
+    period: str,
     min_refresh_hours: int,
 ) -> bool:
     recent_runs = get_recent_sync_runs(connection, ticker=ticker, limit=20)
@@ -201,7 +203,11 @@ def _recent_success_exists(
 
     threshold = datetime.now(UTC) - timedelta(hours=min_refresh_hours)
     for row in recent_runs.to_dict("records"):
-        if row.get("source") != source or row.get("status") != "success":
+        if (
+            row.get("source") != source
+            or row.get("status") != "success"
+            or row.get("period") != period
+        ):
             continue
         finished_at = pd.to_datetime(row.get("finished_at"), errors="coerce", utc=True)
         if pd.notna(finished_at) and finished_at.to_pydatetime() >= threshold:
