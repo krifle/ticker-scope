@@ -10,7 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "ticker_scope.sqlite3"
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 
 @dataclass(frozen=True)
@@ -139,12 +139,30 @@ SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS fear_greed_index (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      index_date TEXT NOT NULL,
+      value REAL NOT NULL,
+      classification TEXT,
+      raw_timestamp INTEGER,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (source, index_date)
+    )
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_daily_prices_ticker_date
     ON daily_prices (ticker, price_date)
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_events_ticker_date
     ON events (ticker, event_date)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_fear_greed_index_date
+    ON fear_greed_index (index_date)
     """,
 ]
 
@@ -233,6 +251,30 @@ MIGRATIONS = [
             """
             ALTER TABLE backtest_runs
             ADD COLUMN date_policy TEXT NOT NULL DEFAULT 'us_stock_market'
+            """,
+        ),
+    ),
+    Migration(
+        version=5,
+        name="fear_greed_index_storage",
+        statements=(
+            """
+            CREATE TABLE IF NOT EXISTS fear_greed_index (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              source TEXT NOT NULL,
+              index_date TEXT NOT NULL,
+              value REAL NOT NULL,
+              classification TEXT,
+              raw_timestamp INTEGER,
+              notes TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              UNIQUE (source, index_date)
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_fear_greed_index_date
+            ON fear_greed_index (index_date)
             """,
         ),
     ),

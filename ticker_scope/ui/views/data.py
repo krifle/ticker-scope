@@ -23,12 +23,13 @@ def render_data_tab(
     st.subheader("Local storage")
     st.caption(str(resolve_db_path()))
 
-    db1, db2, db3, db4, db5 = st.columns(5)
+    db1, db2, db3, db4, db5, db6 = st.columns(6)
     db1.metric("Stored price rows", f"{summary['daily_prices']:,}")
     db2.metric("Symbols", f"{summary['symbols']:,}")
     db3.metric("Sync runs", f"{summary['sync_runs']:,}")
     db4.metric("Events", f"{summary['events']:,}")
     db5.metric("Backtests", f"{summary['backtest_runs']:,}")
+    db6.metric("Sentiment", f"{summary['fear_greed_index']:,}")
 
     cv1, cv2, cv3, cv4 = st.columns(4)
     cv1.metric("Selected rows", f"{coverage.row_count:,}")

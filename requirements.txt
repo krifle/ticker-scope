@@ -8,3 +8,4 @@ holidays
 python-dotenv
 requests
 orjson
+fear-greed

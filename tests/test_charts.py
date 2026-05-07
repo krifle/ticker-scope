@@ -46,6 +46,38 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(len(event_traces[0].x), 1)
         self.assertIn("Earnings", event_traces[0].text[0])
 
+    def test_forecast_chart_adds_fear_greed_subchart(self) -> None:
+        actual = pd.DataFrame(
+            {
+                "ds": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                "y": [10.0, 11.0],
+            }
+        )
+        forecast = pd.DataFrame(
+            {
+                "ds": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                "yhat": [10.0, 10.5],
+                "yhat_lower": [9.0, 9.5],
+                "yhat_upper": [11.0, 11.5],
+            }
+        )
+        fear_greed = pd.DataFrame(
+            {
+                "index_date": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                "value": [24, 52],
+                "classification": ["Extreme Fear", "Neutral"],
+                "source": ["cnn_api", "manual"],
+            }
+        )
+
+        fig = make_forecast_chart(actual, forecast, fear_greed=fear_greed)
+        sentiment_traces = [trace for trace in fig.data if trace.name == "Fear & Greed"]
+
+        self.assertEqual(len(sentiment_traces), 1)
+        self.assertEqual(list(sentiment_traces[0].y), [24, 52])
+        self.assertEqual(fig.layout.yaxis2.range, (0, 100))
+        self.assertGreaterEqual(len(fig.layout.shapes), 5)
+
     def test_multi_ticker_charts_render_summary_bars(self) -> None:
         summary = pd.DataFrame(
             {

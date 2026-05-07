@@ -18,6 +18,7 @@ from ticker_scope.data.repositories import (
     delete_event,
     find_missing_price_ranges,
     get_daily_prices,
+    get_fear_greed_history,
     get_price_coverage,
     list_events,
     list_backtest_metrics,
@@ -25,6 +26,7 @@ from ticker_scope.data.repositories import (
     record_backtest_metrics,
     record_backtest_run,
     upsert_daily_prices,
+    upsert_fear_greed_index,
 )
 from ticker_scope.events.calendar import events_to_holidays
 
@@ -42,7 +44,7 @@ class DataStorageTests(unittest.TestCase):
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
 
-            self.assertEqual([row["version"] for row in rows], [1, 2, 3, 4])
+            self.assertEqual([row["version"] for row in rows], [1, 2, 3, 4, 5])
 
     def test_upsert_normalizes_duplicate_dates(self) -> None:
         history = pd.DataFrame(
@@ -246,6 +248,45 @@ class DataStorageTests(unittest.TestCase):
             self.assertEqual(int(saved_metrics.iloc[0]["horizon_days"]), 7)
             self.assertEqual(saved_metrics.iloc[0]["date_policy"], "us_stock_market")
             self.assertTrue(bool(saved_metrics.iloc[0]["use_events"]))
+
+    def test_fear_greed_history_prefers_manual_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "ticker_scope.sqlite3"
+            init_database(db_path)
+
+            with get_connection(db_path) as connection:
+                api_rows = pd.DataFrame(
+                    {
+                        "index_date": ["2024-01-02", "2024-01-03"],
+                        "value": [30, 40],
+                        "classification": ["Fear", "Fear"],
+                    }
+                )
+                manual_rows = pd.DataFrame(
+                    {
+                        "index_date": ["2024-01-03"],
+                        "value": [55],
+                        "notes": ["manual correction"],
+                    }
+                )
+                api_count = upsert_fear_greed_index(
+                    connection,
+                    api_rows,
+                    source="cnn_api",
+                )
+                manual_count = upsert_fear_greed_index(
+                    connection,
+                    manual_rows,
+                    source="manual",
+                )
+                history = get_fear_greed_history(connection)
+
+            self.assertEqual(api_count, 2)
+            self.assertEqual(manual_count, 1)
+            self.assertEqual(len(history), 2)
+            self.assertEqual(history.iloc[1]["index_date"], date(2024, 1, 3))
+            self.assertEqual(float(history.iloc[1]["value"]), 55.0)
+            self.assertEqual(history.iloc[1]["source"], "manual")
 
 
 if __name__ == "__main__":

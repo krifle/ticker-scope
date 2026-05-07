@@ -10,10 +10,28 @@ def make_forecast_chart(
     forecast: pd.DataFrame,
     anomalies: pd.DataFrame | None = None,
     events: pd.DataFrame | None = None,
+    fear_greed: pd.DataFrame | None = None,
 ) -> go.Figure:
-    fig = go.Figure()
+    has_fear_greed = fear_greed is not None and not fear_greed.empty
+    fig = (
+        make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            row_heights=[0.72, 0.28],
+            vertical_spacing=0.06,
+        )
+        if has_fear_greed
+        else go.Figure()
+    )
 
-    fig.add_trace(
+    def add_trace(trace, row: int = 1) -> None:
+        if has_fear_greed:
+            fig.add_trace(trace, row=row, col=1)
+        else:
+            fig.add_trace(trace)
+
+    add_trace(
         go.Scatter(
             x=forecast["ds"],
             y=forecast["yhat_upper"],
@@ -23,7 +41,7 @@ def make_forecast_chart(
             showlegend=False,
         )
     )
-    fig.add_trace(
+    add_trace(
         go.Scatter(
             x=forecast["ds"],
             y=forecast["yhat_lower"],
@@ -34,7 +52,7 @@ def make_forecast_chart(
             name="Forecast range",
         )
     )
-    fig.add_trace(
+    add_trace(
         go.Scatter(
             x=forecast["ds"],
             y=forecast["yhat"],
@@ -43,7 +61,7 @@ def make_forecast_chart(
             name="Forecast",
         )
     )
-    fig.add_trace(
+    add_trace(
         go.Scatter(
             x=actual["ds"],
             y=actual["y"],
@@ -55,7 +73,7 @@ def make_forecast_chart(
 
     if anomalies is not None and not anomalies.empty:
         anomaly_points = anomalies[anomalies["is_anomaly"]]
-        fig.add_trace(
+        add_trace(
             go.Scatter(
                 x=anomaly_points["ds"],
                 y=anomaly_points["y"],
@@ -72,15 +90,51 @@ def make_forecast_chart(
         y_value=_top_marker_value(actual, forecast),
     )
     if event_trace is not None:
-        fig.add_trace(event_trace)
+        add_trace(event_trace)
+
+    if has_fear_greed:
+        sentiment = _normalize_fear_greed_for_chart(fear_greed)
+        fig.add_trace(
+            go.Scatter(
+                x=sentiment["index_date"],
+                y=sentiment["value"],
+                mode="lines+markers",
+                line={"color": "#0F766E", "width": 2},
+                marker={"color": "#0F766E", "size": 5},
+                customdata=sentiment[["classification", "source"]],
+                hovertemplate=(
+                    "Date: %{x|%Y-%m-%d}<br>"
+                    "Fear & Greed: %{y:.0f}<br>"
+                    "Class: %{customdata[0]}<br>"
+                    "Source: %{customdata[1]}<extra>Sentiment</extra>"
+                ),
+                name="Fear & Greed",
+                connectgaps=False,
+            ),
+            row=2,
+            col=1,
+        )
+        _add_fear_greed_bands(fig)
 
     fig.update_layout(
         margin={"l": 12, "r": 12, "t": 24, "b": 12},
         hovermode="x unified",
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0},
-        xaxis_title=None,
-        yaxis_title="Price",
     )
+    if has_fear_greed:
+        fig.update_layout(height=620)
+        fig.update_yaxes(title_text="Price", row=1, col=1)
+        fig.update_yaxes(
+            title_text="Fear & Greed",
+            range=[0, 100],
+            tickmode="array",
+            tickvals=[0, 25, 50, 75, 100],
+            row=2,
+            col=1,
+        )
+        fig.update_xaxes(title_text=None)
+    else:
+        fig.update_layout(xaxis_title=None, yaxis_title="Price")
     return fig
 
 
@@ -378,6 +432,43 @@ def _make_event_marker_trace(
         hovertemplate="%{text}<extra>Event</extra>",
         name="Events",
     )
+
+
+def _normalize_fear_greed_for_chart(fear_greed: pd.DataFrame) -> pd.DataFrame:
+    sentiment = fear_greed.copy()
+    sentiment["index_date"] = pd.to_datetime(
+        sentiment["index_date"],
+        errors="coerce",
+    )
+    sentiment["value"] = pd.to_numeric(sentiment["value"], errors="coerce")
+    if "classification" not in sentiment.columns:
+        sentiment["classification"] = ""
+    if "source" not in sentiment.columns:
+        sentiment["source"] = ""
+    return sentiment.dropna(subset=["index_date", "value"]).sort_values("index_date")
+
+
+def _add_fear_greed_bands(fig: go.Figure) -> None:
+    bands = [
+        (0, 24, "rgba(239, 68, 68, 0.10)"),
+        (24, 44, "rgba(249, 115, 22, 0.10)"),
+        (44, 55, "rgba(148, 163, 184, 0.10)"),
+        (55, 75, "rgba(34, 197, 94, 0.10)"),
+        (75, 100, "rgba(16, 185, 129, 0.14)"),
+    ]
+    for y0, y1, color in bands:
+        fig.add_shape(
+            type="rect",
+            xref="paper",
+            yref="y2",
+            x0=0,
+            x1=1,
+            y0=y0,
+            y1=y1,
+            fillcolor=color,
+            line={"width": 0},
+            layer="below",
+        )
 
 
 def _visible_events(

@@ -13,11 +13,13 @@ from ticker_scope.ui.charts import (
     make_forecast_chart,
 )
 from ticker_scope.ui.data_access import cached_history
+from ticker_scope.ui.data_access import cached_fear_greed_history
 from ticker_scope.ui.helpers import prepare_anomaly_table
 from ticker_scope.ui.views.backtest import render_single_backtest_tab
 from ticker_scope.ui.views.common import render_storage_summary
 from ticker_scope.ui.views.data import render_data_tab
 from ticker_scope.ui.views.events import render_events_tab
+from ticker_scope.ui.views.sentiment import render_sentiment_tab
 
 
 def render_single_ticker_view(
@@ -66,6 +68,10 @@ def render_single_ticker_view(
             )
     anomalies = detect_interval_anomalies(prophet_df, forecast)
     anomaly_points = anomaly_summary(anomalies)
+    fear_greed = cached_fear_greed_history(
+        start_date=prophet_df["ds"].min().date(),
+        end_date=forecast["ds"].max().date(),
+    )
 
     latest_price = prophet_df.iloc[-1]["y"]
     latest_date = prophet_df.iloc[-1]["ds"].date()
@@ -83,7 +89,7 @@ def render_single_ticker_view(
         f"Date handling: {date_policy_label(date_policy)}"
     )
 
-    tabs = st.tabs(["Forecast", "Anomalies", "Backtest", "Events", "Data"])
+    tabs = st.tabs(["Forecast", "Anomalies", "Backtest", "Events", "Sentiment", "Data"])
 
     with tabs[0]:
         st.plotly_chart(
@@ -92,6 +98,7 @@ def render_single_ticker_view(
                 forecast,
                 anomalies,
                 events=db_events if active_holidays is not None else None,
+                fear_greed=fear_greed,
             ),
             width="stretch",
         )
@@ -130,4 +137,7 @@ def render_single_ticker_view(
         )
 
     with tabs[4]:
+        render_sentiment_tab()
+
+    with tabs[5]:
         render_data_tab(symbol, period, history, date_policy, storage_status)

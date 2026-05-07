@@ -40,6 +40,12 @@ EVENT_CATEGORIES = (
     "service",
 )
 
+FEAR_GREED_SOURCE_PRIORITY = {
+    "manual": 0,
+    "csv_import": 1,
+    "cnn_api": 2,
+}
+
 
 def upsert_symbol(
     connection: sqlite3.Connection,
@@ -496,6 +502,7 @@ def get_database_summary(connection: sqlite3.Connection) -> dict[str, int]:
         "sync_runs",
         "backtest_runs",
         "backtest_metrics",
+        "fear_greed_index",
         "schema_migrations",
     )
     summary = {}
@@ -503,6 +510,271 @@ def get_database_summary(connection: sqlite3.Connection) -> dict[str, int]:
         row = connection.execute(f"SELECT COUNT(*) AS value FROM {table}").fetchone()
         summary[table] = int(row["value"])
     return summary
+
+
+def classify_fear_greed_value(value: float) -> str:
+    score = float(value)
+    if score < 0 or score > 100:
+        raise ValueError("Fear & Greed value must be between 0 and 100.")
+    if score <= 24:
+        return "Extreme Fear"
+    if score <= 44:
+        return "Fear"
+    if score <= 55:
+        return "Neutral"
+    if score <= 75:
+        return "Greed"
+    return "Extreme Greed"
+
+
+def upsert_fear_greed_index(
+    connection: sqlite3.Connection,
+    data: pd.DataFrame,
+    source: str = "manual",
+) -> int:
+    normalized = normalize_fear_greed_history(data, source=source)
+    if normalized.empty:
+        return 0
+
+    now = _utc_now()
+    rows = []
+    for row in normalized.to_dict("records"):
+        rows.append(
+            (
+                row["source"],
+                row["index_date"].isoformat(),
+                float(row["value"]),
+                _normalize_optional_text(row.get("classification"))
+                or classify_fear_greed_value(float(row["value"])),
+                _optional_int(row.get("raw_timestamp")),
+                _normalize_optional_text(row.get("notes")),
+                now,
+                now,
+            )
+        )
+
+    connection.executemany(
+        """
+        INSERT INTO fear_greed_index (
+          source, index_date, value, classification, raw_timestamp, notes,
+          created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source, index_date) DO UPDATE SET
+          value = excluded.value,
+          classification = excluded.classification,
+          raw_timestamp = excluded.raw_timestamp,
+          notes = excluded.notes,
+          updated_at = excluded.updated_at
+        """,
+        rows,
+    )
+    return len(rows)
+
+
+def normalize_fear_greed_history(
+    data: pd.DataFrame,
+    source: str = "manual",
+) -> pd.DataFrame:
+    if data.empty:
+        return pd.DataFrame(
+            columns=[
+                "source",
+                "index_date",
+                "value",
+                "classification",
+                "raw_timestamp",
+                "notes",
+            ]
+        )
+
+    normalized_source = _normalize_source(source)
+    normalized = data.copy()
+    if "index_date" not in normalized.columns and "date" in normalized.columns:
+        normalized = normalized.rename(columns={"date": "index_date"})
+    if "score" in normalized.columns and "value" not in normalized.columns:
+        normalized = normalized.rename(columns={"score": "value"})
+    if "rating" in normalized.columns and "classification" not in normalized.columns:
+        normalized = normalized.rename(columns={"rating": "classification"})
+
+    required_columns = {"index_date", "value"}
+    missing_columns = required_columns - set(normalized.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Missing required Fear & Greed columns: {sorted(missing_columns)}"
+        )
+
+    normalized["source"] = normalized.get("source", normalized_source)
+    normalized["source"] = normalized["source"].fillna(normalized_source).map(_normalize_source)
+    normalized["index_date"] = pd.to_datetime(
+        normalized["index_date"],
+        errors="coerce",
+    ).dt.date
+    normalized["value"] = pd.to_numeric(normalized["value"], errors="coerce")
+    if "classification" not in normalized.columns:
+        normalized["classification"] = None
+    if "raw_timestamp" not in normalized.columns:
+        normalized["raw_timestamp"] = None
+    if "notes" not in normalized.columns:
+        normalized["notes"] = None
+
+    normalized = normalized.dropna(subset=["index_date", "value"])
+    normalized = normalized[
+        normalized["value"].between(0, 100, inclusive="both")
+    ].copy()
+    if normalized.empty:
+        return normalized
+
+    missing_classification = normalized["classification"].isna() | (
+        normalized["classification"].astype(str).str.strip() == ""
+    )
+    normalized.loc[missing_classification, "classification"] = normalized.loc[
+        missing_classification,
+        "value",
+    ].map(classify_fear_greed_value)
+
+    selected_columns = [
+        "source",
+        "index_date",
+        "value",
+        "classification",
+        "raw_timestamp",
+        "notes",
+    ]
+    normalized = normalized[selected_columns]
+    return normalized.drop_duplicates(
+        subset=["source", "index_date"],
+        keep="last",
+    ).sort_values("index_date")
+
+
+def get_fear_greed_history(
+    connection: sqlite3.Connection,
+    start_date: date | str | None = None,
+    end_date: date | str | None = None,
+    preferred_sources: tuple[str, ...] | list[str] | None = None,
+) -> pd.DataFrame:
+    query = """
+        SELECT
+          id,
+          source,
+          index_date,
+          value,
+          classification,
+          raw_timestamp,
+          notes,
+          created_at,
+          updated_at
+        FROM fear_greed_index
+        WHERE 1 = 1
+    """
+    params: list[Any] = []
+    if start_date is not None:
+        query += " AND index_date >= ?"
+        params.append(_date_string(start_date))
+    if end_date is not None:
+        query += " AND index_date <= ?"
+        params.append(_date_string(end_date))
+    if preferred_sources:
+        normalized_sources = [_normalize_source(source) for source in preferred_sources]
+        placeholders = ", ".join("?" for _ in normalized_sources)
+        query += f" AND source IN ({placeholders})"
+        params.extend(normalized_sources)
+
+    result = pd.read_sql_query(query, connection, params=params)
+    if result.empty:
+        return result
+
+    result["index_date"] = pd.to_datetime(result["index_date"]).dt.date
+    result["value"] = pd.to_numeric(result["value"], errors="coerce")
+    result["_source_rank"] = result["source"].map(_fear_greed_source_rank)
+    result = (
+        result.sort_values(["index_date", "_source_rank", "id"])
+        .drop_duplicates(subset=["index_date"], keep="first")
+        .drop(columns=["_source_rank"])
+        .sort_values("index_date")
+        .reset_index(drop=True)
+    )
+    return result
+
+
+def list_fear_greed_values(
+    connection: sqlite3.Connection,
+    limit: int = 500,
+) -> pd.DataFrame:
+    result = pd.read_sql_query(
+        """
+        SELECT
+          id,
+          source,
+          index_date,
+          value,
+          classification,
+          raw_timestamp,
+          notes,
+          created_at,
+          updated_at
+        FROM fear_greed_index
+        ORDER BY index_date DESC, id DESC
+        LIMIT ?
+        """,
+        connection,
+        params=[int(limit)],
+    )
+    if result.empty:
+        return result
+    result["index_date"] = pd.to_datetime(result["index_date"]).dt.date
+    result["value"] = pd.to_numeric(result["value"], errors="coerce")
+    return result
+
+
+def delete_fear_greed_value(connection: sqlite3.Connection, value_id: int) -> bool:
+    cursor = connection.execute(
+        "DELETE FROM fear_greed_index WHERE id = ?",
+        (int(value_id),),
+    )
+    return cursor.rowcount > 0
+
+
+def get_fear_greed_coverage(connection: sqlite3.Connection) -> dict[str, Any]:
+    row = connection.execute(
+        """
+        SELECT
+          COUNT(*) AS row_count,
+          MIN(index_date) AS start_date,
+          MAX(index_date) AS end_date
+        FROM fear_greed_index
+        """
+    ).fetchone()
+    latest_history = get_fear_greed_history(
+        connection,
+        start_date=row["end_date"],
+        end_date=row["end_date"],
+    )
+    latest = latest_history.iloc[0].to_dict() if not latest_history.empty else None
+    return {
+        "row_count": int(row["row_count"]),
+        "start_date": (
+            date.fromisoformat(row["start_date"])
+            if row["start_date"] is not None
+            else None
+        ),
+        "end_date": (
+            date.fromisoformat(row["end_date"])
+            if row["end_date"] is not None
+            else None
+        ),
+        "latest_date": (
+            latest["index_date"] if latest is not None else None
+        ),
+        "latest_value": (
+            float(latest["value"])
+            if latest is not None and latest["value"] is not None
+            else None
+        ),
+        "latest_classification": latest["classification"] if latest is not None else None,
+        "latest_source": latest["source"] if latest is not None else None,
+    }
 
 
 def get_recent_sync_runs(
@@ -818,10 +1090,21 @@ def _normalize_optional_ticker(value: str | None) -> str | None:
     return normalized or None
 
 
-def _normalize_optional_text(value: str | None) -> str | None:
-    if value is None:
+def _normalize_source(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        raise ValueError("Source is required.")
+    return normalized
+
+
+def _fear_greed_source_rank(value: Any) -> int:
+    return FEAR_GREED_SOURCE_PRIORITY.get(str(value or "").strip().lower(), 99)
+
+
+def _normalize_optional_text(value: Any) -> str | None:
+    if value is None or pd.isna(value):
         return None
-    normalized = value.strip()
+    normalized = str(value).strip()
     return normalized or None
 
 
