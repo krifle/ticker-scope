@@ -6,6 +6,14 @@ Ticker Scope는 Meta Prophet을 사용해 주식 일별 종가를 예측하고, 
 
 ## 실행 방법
 
+가장 간단한 실행 방법은 프로젝트 루트에서 `run.sh`를 실행하는 것입니다. `.venv`가 없으면 자동으로 만들고, 필요한 의존성이 없으면 설치한 뒤 Streamlit을 시작합니다.
+
+```bash
+./run.sh
+```
+
+수동으로 실행하려면 다음 명령을 사용합니다.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -14,6 +22,25 @@ streamlit run app.py
 ```
 
 브라우저에서 `http://localhost:8501`로 접속합니다.
+
+## Standalone 빌드
+
+개발 의존성을 설치한 뒤 PyInstaller로 단독 실행 파일을 만들 수 있습니다.
+
+```bash
+python -m pip install -r requirements-dev.txt
+pyinstaller TickerScope.spec --clean --noconfirm
+```
+
+빌드 결과는 `dist/TickerScope`에 생성됩니다. 실행하면 내부에서 Streamlit 서버를 띄우고 기본 브라우저를 엽니다.
+
+standalone 실행에서는 SQLite DB가 실행파일 내부가 아니라 OS별 사용자 데이터 폴더에 저장됩니다.
+
+- macOS: `~/Library/Application Support/Ticker Scope/ticker_scope.sqlite3`
+- Windows: `%APPDATA%\Ticker Scope\ticker_scope.sqlite3`
+- Linux: `$XDG_DATA_HOME/ticker-scope/ticker_scope.sqlite3` 또는 `~/.local/share/ticker-scope/ticker_scope.sqlite3`
+
+개발 실행처럼 `TICKER_SCOPE_DB_PATH`를 지정하면 standalone에서도 해당 DB 경로를 우선 사용합니다.
 
 ## 개발/테스트
 
@@ -28,7 +55,7 @@ python -m coverage report
 
 ## 데이터 저장소
 
-앱은 `data/ticker_scope.sqlite3` SQLite DB를 로컬 저장소로 사용합니다. 가격 데이터가 필요할 때마다 `yfinance`를 새로 호출하지 않고, 먼저 DB에 저장된 데이터를 확인한 뒤 비어 있는 날짜 구간만 동기화합니다.
+개발 실행에서는 앱이 `data/ticker_scope.sqlite3` SQLite DB를 로컬 저장소로 사용합니다. 가격 데이터가 필요할 때마다 `yfinance`를 새로 호출하지 않고, 먼저 DB에 저장된 데이터를 확인한 뒤 비어 있는 날짜 구간만 동기화합니다.
 
 테스트나 별도 실험용 DB를 쓰고 싶을 때는 `TICKER_SCOPE_DB_PATH` 환경변수로 DB 파일 경로를 지정할 수 있습니다.
 
