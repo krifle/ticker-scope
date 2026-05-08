@@ -13,3 +13,5 @@ data/*.sqlite3
 data/*.sqlite3-*
 data/cache/
 exports/
+build/
+dist/

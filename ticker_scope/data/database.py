@@ -6,6 +6,7 @@ import os
 import sqlite3
 from pathlib import Path
 
+from ticker_scope.runtime import get_standalone_db_path, is_standalone_runtime
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
@@ -288,6 +289,9 @@ def resolve_db_path(db_path: Path | str | None = None) -> Path:
     configured = os.getenv("TICKER_SCOPE_DB_PATH")
     if configured:
         return Path(configured).expanduser()
+
+    if is_standalone_runtime():
+        return get_standalone_db_path()
 
     return DB_PATH
 
