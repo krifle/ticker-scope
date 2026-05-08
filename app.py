@@ -10,9 +10,11 @@ from ticker_scope.ui.views.single import render_single_ticker_view
 
 def main() -> None:
     st.set_page_config(page_title="Ticker Scope", layout="wide")
-    st.title("Ticker Scope")
 
     controls = render_sidebar()
+    st.title("Ticker Scope")
+    if controls.analysis_view == "Single ticker":
+        st.header(controls.symbol)
 
     try:
         if controls.force_refresh:
