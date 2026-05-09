@@ -78,6 +78,50 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(fig.layout.yaxis2.range, (0, 100))
         self.assertGreaterEqual(len(fig.layout.shapes), 5)
 
+    def test_forecast_chart_adds_selected_moving_average_lines(self) -> None:
+        actual = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=6, freq="D"),
+                "y": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            }
+        )
+        forecast = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=6, freq="D"),
+                "yhat": [10.0, 10.5, 11.0, 11.5, 12.0, 12.5],
+                "yhat_lower": [9.0, 9.5, 10.0, 10.5, 11.0, 11.5],
+                "yhat_upper": [11.0, 11.5, 12.0, 12.5, 13.0, 13.5],
+            }
+        )
+
+        fig = make_forecast_chart(actual, forecast, moving_average_windows=[5])
+        moving_average_traces = [trace for trace in fig.data if trace.name == "MA 5"]
+
+        self.assertEqual(len(moving_average_traces), 1)
+        self.assertTrue(pd.isna(moving_average_traces[0].y[3]))
+        self.assertEqual(moving_average_traces[0].y[4], 12.0)
+        self.assertEqual(moving_average_traces[0].y[5], 13.0)
+
+    def test_forecast_chart_can_hide_moving_average_lines(self) -> None:
+        actual = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=6, freq="D"),
+                "y": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            }
+        )
+        forecast = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=6, freq="D"),
+                "yhat": [10.0, 10.5, 11.0, 11.5, 12.0, 12.5],
+                "yhat_lower": [9.0, 9.5, 10.0, 10.5, 11.0, 11.5],
+                "yhat_upper": [11.0, 11.5, 12.0, 12.5, 13.0, 13.5],
+            }
+        )
+
+        fig = make_forecast_chart(actual, forecast, moving_average_windows=[])
+
+        self.assertNotIn("MA 5", [trace.name for trace in fig.data])
+
     def test_multi_ticker_charts_render_summary_bars(self) -> None:
         summary = pd.DataFrame(
             {

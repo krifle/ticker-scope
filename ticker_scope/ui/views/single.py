@@ -9,6 +9,7 @@ from ticker_scope.modeling.anomalies import anomaly_summary, detect_interval_ano
 from ticker_scope.modeling.prophet_model import fit_and_forecast
 from ticker_scope.services.storage import load_model_events, load_storage_status
 from ticker_scope.ui.charts import (
+    MOVING_AVERAGE_WINDOWS,
     make_components_chart,
     make_forecast_chart,
 )
@@ -92,6 +93,12 @@ def render_single_ticker_view(
     tabs = st.tabs(["Forecast", "Anomalies", "Backtest", "Events", "Sentiment", "Data"])
 
     with tabs[0]:
+        selected_moving_averages = st.multiselect(
+            "Moving averages",
+            options=list(MOVING_AVERAGE_WINDOWS),
+            default=list(MOVING_AVERAGE_WINDOWS),
+            format_func=lambda window: f"{window}-day",
+        )
         st.plotly_chart(
             make_forecast_chart(
                 prophet_df,
@@ -99,6 +106,7 @@ def render_single_ticker_view(
                 anomalies,
                 events=db_events if active_holidays is not None else None,
                 fear_greed=fear_greed,
+                moving_average_windows=selected_moving_averages,
             ),
             width="stretch",
         )

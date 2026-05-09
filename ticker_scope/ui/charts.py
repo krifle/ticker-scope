@@ -5,12 +5,24 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
+MOVING_AVERAGE_WINDOWS = (5, 20, 60, 120, 240)
+
+MOVING_AVERAGE_COLORS = {
+    5: "#F97316",
+    20: "#16A34A",
+    60: "#0891B2",
+    120: "#9333EA",
+    240: "#DC2626",
+}
+
+
 def make_forecast_chart(
     actual: pd.DataFrame,
     forecast: pd.DataFrame,
     anomalies: pd.DataFrame | None = None,
     events: pd.DataFrame | None = None,
     fear_greed: pd.DataFrame | None = None,
+    moving_average_windows: list[int] | tuple[int, ...] | None = MOVING_AVERAGE_WINDOWS,
 ) -> go.Figure:
     has_fear_greed = fear_greed is not None and not fear_greed.empty
     fig = (
@@ -70,6 +82,27 @@ def make_forecast_chart(
             name="Actual",
         )
     )
+    for window in moving_average_windows or ():
+        moving_average = actual["y"].rolling(window=window, min_periods=window).mean()
+        if moving_average.notna().any():
+            add_trace(
+                go.Scatter(
+                    x=actual["ds"],
+                    y=moving_average,
+                    mode="lines",
+                    line={
+                        "color": MOVING_AVERAGE_COLORS.get(window, "#64748B"),
+                        "width": 1.7,
+                    },
+                    name=f"MA {window}",
+                    connectgaps=False,
+                    hovertemplate=(
+                        "Date: %{x|%Y-%m-%d}<br>"
+                        f"MA {window}: "
+                        "%{y:,.2f}<extra></extra>"
+                    ),
+                )
+            )
 
     if anomalies is not None and not anomalies.empty:
         anomaly_points = anomalies[anomalies["is_anomaly"]]
