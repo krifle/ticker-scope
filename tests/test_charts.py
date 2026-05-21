@@ -7,6 +7,7 @@ import pandas as pd
 from ticker_scope.ui.charts import (
     make_components_chart,
     make_forecast_chart,
+    make_forecast_replay_chart,
     make_multi_anomaly_chart,
     make_multi_metric_bar_chart,
 )
@@ -121,6 +122,37 @@ class ChartTests(unittest.TestCase):
         fig = make_forecast_chart(actual, forecast, moving_average_windows=[])
 
         self.assertNotIn("MA 5", [trace.name for trace in fig.data])
+
+    def test_forecast_replay_chart_marks_cutoff(self) -> None:
+        actual = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=4, freq="D"),
+                "y": [10.0, 11.0, 12.0, 13.0],
+            }
+        )
+        forecast = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=5, freq="D"),
+                "yhat": [10.0, 10.5, 11.0, 11.5, 12.0],
+                "yhat_lower": [9.0, 9.5, 10.0, 10.5, 11.0],
+                "yhat_upper": [11.0, 11.5, 12.0, 12.5, 13.0],
+            }
+        )
+
+        fig = make_forecast_replay_chart(
+            actual,
+            forecast,
+            pd.Timestamp("2024-01-03"),
+        )
+
+        self.assertEqual([trace.name for trace in fig.data], [
+            "Upper",
+            "Forecast range",
+            "Forecast",
+            "Actual",
+        ])
+        self.assertEqual(len(fig.layout.shapes), 1)
+        self.assertEqual(fig.layout.shapes[0].line.dash, "dash")
 
     def test_multi_ticker_charts_render_summary_bars(self) -> None:
         summary = pd.DataFrame(

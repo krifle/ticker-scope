@@ -6,6 +6,7 @@ import unittest
 import pandas as pd
 
 from ticker_scope.modeling import backtest
+from ticker_scope.modeling.forecast_replay import run_forecast_replay
 
 
 class BacktestTests(unittest.TestCase):
@@ -89,6 +90,37 @@ class BacktestTests(unittest.TestCase):
         self.assertEqual(set(summary["horizon_days"]), {7, 30})
         self.assertEqual(float(summary["mape"].max()), 0.0)
         self.assertEqual(float(summary["coverage"].min()), 100.0)
+
+    def test_forecast_replay_trains_through_cutoff(self) -> None:
+        prophet_df = pd.DataFrame(
+            {
+                "ds": pd.date_range("2024-01-01", periods=40, freq="D"),
+                "y": [float(value) for value in range(40)],
+            }
+        )
+
+        with patch("ticker_scope.modeling.forecast_replay.fit_and_forecast") as mocked:
+            mocked.return_value = (
+                object(),
+                pd.DataFrame(
+                    {
+                        "ds": pd.date_range("2024-01-01", periods=33, freq="D"),
+                        "yhat": [1.0] * 33,
+                        "yhat_lower": [0.5] * 33,
+                        "yhat_upper": [1.5] * 33,
+                    }
+                ),
+            )
+            train_df, forecast = run_forecast_replay(
+                prophet_df,
+                cutoff_date=pd.Timestamp("2024-01-30"),
+                periods=3,
+            )
+
+        self.assertEqual(len(train_df), 30)
+        self.assertEqual(train_df.iloc[-1]["ds"], pd.Timestamp("2024-01-30"))
+        self.assertEqual(len(forecast), 33)
+        mocked.assert_called_once()
 
 
 if __name__ == "__main__":

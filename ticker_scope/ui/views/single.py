@@ -20,6 +20,7 @@ from ticker_scope.ui.views.backtest import render_single_backtest_tab
 from ticker_scope.ui.views.common import render_storage_summary
 from ticker_scope.ui.views.data import render_data_tab
 from ticker_scope.ui.views.events import render_events_tab
+from ticker_scope.ui.views.forecast_replay import render_forecast_replay_tab
 from ticker_scope.ui.views.sentiment import render_sentiment_tab
 
 
@@ -90,7 +91,17 @@ def render_single_ticker_view(
         f"Date handling: {date_policy_label(date_policy)}"
     )
 
-    tabs = st.tabs(["Forecast", "Anomalies", "Backtest", "Events", "Sentiment", "Data"])
+    tabs = st.tabs(
+        [
+            "Forecast",
+            "Forecast Replay",
+            "Anomalies",
+            "Backtest",
+            "Events",
+            "Sentiment",
+            "Data",
+        ]
+    )
 
     with tabs[0]:
         selected_moving_averages = st.multiselect(
@@ -114,6 +125,18 @@ def render_single_ticker_view(
         st.plotly_chart(make_components_chart(forecast), width="stretch")
 
     with tabs[1]:
+        render_forecast_replay_tab(
+            symbol=symbol,
+            period=period,
+            prophet_df=prophet_df,
+            forecast_days=forecast_days,
+            active_holidays=active_holidays,
+            interval_width=interval_width,
+            use_events=use_events,
+            date_policy=date_policy,
+        )
+
+    with tabs[2]:
         if anomaly_points.empty:
             st.info("No anomaly points detected.")
         else:
@@ -123,7 +146,7 @@ def render_single_ticker_view(
                 hide_index=True,
             )
 
-    with tabs[2]:
+    with tabs[3]:
         render_single_backtest_tab(
             symbol=symbol,
             period=period,
@@ -135,7 +158,7 @@ def render_single_ticker_view(
             run_backtest=run_backtest,
         )
 
-    with tabs[3]:
+    with tabs[4]:
         render_events_tab(
             symbol=symbol,
             events=db_events,
@@ -144,8 +167,8 @@ def render_single_ticker_view(
             event_forecast=comparison_event_forecast,
         )
 
-    with tabs[4]:
+    with tabs[5]:
         render_sentiment_tab()
 
-    with tabs[5]:
+    with tabs[6]:
         render_data_tab(symbol, period, history, date_policy, storage_status)

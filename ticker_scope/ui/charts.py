@@ -171,6 +171,82 @@ def make_forecast_chart(
     return fig
 
 
+def make_forecast_replay_chart(
+    actual: pd.DataFrame,
+    forecast: pd.DataFrame,
+    cutoff_date: pd.Timestamp,
+) -> go.Figure:
+    cutoff = pd.Timestamp(cutoff_date).normalize()
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat_upper"],
+            line={"width": 0},
+            hoverinfo="skip",
+            name="Upper",
+            showlegend=False,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat_lower"],
+            fill="tonexty",
+            fillcolor="rgba(99, 110, 250, 0.14)",
+            line={"width": 0},
+            hoverinfo="skip",
+            name="Forecast range",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat"],
+            mode="lines",
+            line={"color": "#636EFA", "width": 2},
+            name="Forecast",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=actual["ds"],
+            y=actual["y"],
+            mode="lines",
+            line={"color": "#111827", "width": 2},
+            name="Actual",
+        )
+    )
+    fig.add_shape(
+        type="line",
+        x0=cutoff,
+        x1=cutoff,
+        y0=0,
+        y1=1,
+        xref="x",
+        yref="paper",
+        line={"width": 1.5, "dash": "dash", "color": "#DC2626"},
+    )
+    fig.add_annotation(
+        x=cutoff,
+        y=1,
+        xref="x",
+        yref="paper",
+        text="Cutoff",
+        showarrow=False,
+        yshift=10,
+        font={"color": "#DC2626", "size": 12},
+    )
+    fig.update_layout(
+        margin={"l": 12, "r": 12, "t": 24, "b": 12},
+        hovermode="x unified",
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0},
+        xaxis_title=None,
+        yaxis_title="Price",
+    )
+    return fig
+
+
 def make_components_chart(forecast: pd.DataFrame) -> go.Figure:
     component_columns = [
         column
