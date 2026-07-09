@@ -7,11 +7,13 @@ import pandas as pd
 import requests
 
 from ticker_scope.config import get_alpha_vantage_api_key
+from ticker_scope.observability import get_logger, masked_params
 
 
 ALPHA_VANTAGE_EARNINGS_URL = "https://www.alphavantage.co/query"
 ALPHA_VANTAGE_EARNINGS_SOURCE = "alpha_vantage_earnings"
 ALPHA_VANTAGE_HORIZONS = ("3month", "6month", "12month")
+LOGGER = get_logger(__name__)
 
 
 class EventProviderError(RuntimeError):
@@ -56,24 +58,41 @@ class AlphaVantageEarningsClient:
                 "Set it in .env, environment variables, or the UI field."
             )
 
+        params = {
+            "function": "EARNINGS_CALENDAR",
+            "symbol": symbol,
+            "horizon": horizon,
+            "apikey": api_key,
+        }
+        LOGGER.info(
+            "API request provider=alpha_vantage url=%s params=%s",
+            self.base_url,
+            masked_params(params),
+        )
         response = self.session.get(
             self.base_url,
-            params={
-                "function": "EARNINGS_CALENDAR",
-                "symbol": symbol,
-                "horizon": horizon,
-                "apikey": api_key,
-            },
+            params=params,
             timeout=self.timeout,
+        )
+        LOGGER.info(
+            "API response provider=alpha_vantage url=%s status_code=%s",
+            self.base_url,
+            response.status_code,
         )
         if response.status_code == 429:
             raise EventProviderRateLimitError("Alpha Vantage rate limit reached.")
         response.raise_for_status()
 
-        return normalize_alpha_vantage_earnings_csv(
+        events = normalize_alpha_vantage_earnings_csv(
             response.text,
             requested_symbol=symbol,
         )
+        LOGGER.info(
+            "API parsed provider=alpha_vantage ticker=%s rows=%s",
+            symbol,
+            len(events),
+        )
+        return events
 
 
 def normalize_alpha_vantage_earnings_csv(

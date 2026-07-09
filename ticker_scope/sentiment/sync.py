@@ -14,10 +14,12 @@ from ticker_scope.sentiment.providers import (
     CnnFearGreedClient,
     FearGreedClient,
 )
+from ticker_scope.observability import get_logger
 
 
 CNN_FEAR_GREED_SYNC_SOURCE = "cnn_fear_greed"
 SENTIMENT_SYNC_TICKER = "MARKET"
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,12 @@ def sync_fear_greed_index(
 ) -> SentimentSyncResult:
     init_database()
     started_at = _utc_now()
+    LOGGER.info(
+        "Sync start source=%s ticker=%s force_refresh=%s",
+        CNN_FEAR_GREED_SYNC_SOURCE,
+        SENTIMENT_SYNC_TICKER,
+        force_refresh,
+    )
 
     with get_connection() as connection:
         if not force_refresh and _recent_success_exists(
@@ -56,6 +64,13 @@ def sync_fear_greed_index(
                 started_at=started_at,
                 message=message,
             )
+            LOGGER.info(
+                "DB write table=sync_runs source=%s ticker=%s status=skipped "
+                "message=%s",
+                CNN_FEAR_GREED_SYNC_SOURCE,
+                SENTIMENT_SYNC_TICKER,
+                message,
+            )
             connection.commit()
             return SentimentSyncResult(
                 fetched_rows=0,
@@ -72,6 +87,11 @@ def sync_fear_greed_index(
                 history,
                 source=CNN_FEAR_GREED_SOURCE,
             )
+            LOGGER.info(
+                "DB write table=fear_greed_index source=%s rows=%s",
+                CNN_FEAR_GREED_SOURCE,
+                stored_rows,
+            )
             message = f"synced {stored_rows} Fear & Greed rows"
             record_sync_run(
                 connection,
@@ -84,6 +104,14 @@ def sync_fear_greed_index(
                 started_at=started_at,
                 message=message,
             )
+            LOGGER.info(
+                "DB write table=sync_runs source=%s ticker=%s status=success "
+                "row_count=%s message=%s",
+                CNN_FEAR_GREED_SYNC_SOURCE,
+                SENTIMENT_SYNC_TICKER,
+                stored_rows,
+                message,
+            )
             connection.commit()
             return SentimentSyncResult(
                 fetched_rows=len(history),
@@ -92,6 +120,11 @@ def sync_fear_greed_index(
                 message=message,
             )
         except Exception as exc:
+            LOGGER.exception(
+                "Sync failed source=%s ticker=%s",
+                CNN_FEAR_GREED_SYNC_SOURCE,
+                SENTIMENT_SYNC_TICKER,
+            )
             record_sync_run(
                 connection,
                 source=CNN_FEAR_GREED_SYNC_SOURCE,
@@ -103,6 +136,13 @@ def sync_fear_greed_index(
                 started_at=started_at,
                 message=str(exc),
             )
+            LOGGER.info(
+                "DB write table=sync_runs source=%s ticker=%s status=failed "
+                "message=%s",
+                CNN_FEAR_GREED_SYNC_SOURCE,
+                SENTIMENT_SYNC_TICKER,
+                str(exc),
+            )
             connection.commit()
             raise
 
@@ -112,6 +152,12 @@ def _recent_success_exists(connection, min_refresh_hours: int) -> bool:
         connection,
         ticker=SENTIMENT_SYNC_TICKER,
         limit=20,
+    )
+    LOGGER.info(
+        "DB read table=sync_runs source=%s ticker=%s rows=%s",
+        CNN_FEAR_GREED_SYNC_SOURCE,
+        SENTIMENT_SYNC_TICKER,
+        len(recent_runs),
     )
     if recent_runs.empty:
         return False

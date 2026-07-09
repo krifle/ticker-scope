@@ -18,43 +18,73 @@ from ticker_scope.data.repositories import (
     record_backtest_run,
 )
 from ticker_scope.data.sync import period_to_start_date
+from ticker_scope.observability import get_logger
+
+
+LOGGER = get_logger(__name__)
 
 
 def load_storage_status(symbol: str, period: str, date_policy: str):
     effective_date_policy = resolve_date_policy_for_symbol(symbol, date_policy)
     init_database()
     with get_connection() as connection:
-        return {
-            "summary": get_database_summary(connection),
-            "coverage": get_price_coverage(
-                connection,
-                ticker=symbol,
-                start_date=period_to_start_date(period),
-                end_date=date.today(),
-                interval="1d",
-                adjusted=True,
-                date_policy=effective_date_policy,
-            ),
-            "recent_sync_runs": get_recent_sync_runs(connection, ticker=symbol, limit=20),
-        }
+        summary = get_database_summary(connection)
+        coverage = get_price_coverage(
+            connection,
+            ticker=symbol,
+            start_date=period_to_start_date(period),
+            end_date=date.today(),
+            interval="1d",
+            adjusted=True,
+            date_policy=effective_date_policy,
+        )
+        recent_sync_runs = get_recent_sync_runs(connection, ticker=symbol, limit=20)
+    LOGGER.info(
+        "DB read storage_status ticker=%s price_rows=%s recent_sync_runs=%s",
+        symbol.strip().upper(),
+        coverage.row_count,
+        len(recent_sync_runs),
+    )
+    return {
+        "summary": summary,
+        "coverage": coverage,
+        "recent_sync_runs": recent_sync_runs,
+    }
 
 
 def load_model_events(symbol: str) -> pd.DataFrame:
     init_database()
     with get_connection() as connection:
-        return list_events(connection, ticker=symbol, include_global=True)
+        events = list_events(connection, ticker=symbol, include_global=True)
+    LOGGER.info(
+        "DB read table=events ticker=%s rows=%s include_global=True",
+        symbol.strip().upper(),
+        len(events),
+    )
+    return events
 
 
 def load_saved_backtest_metrics(symbol: str | None) -> pd.DataFrame:
     init_database()
     with get_connection() as connection:
-        return list_backtest_metrics(connection, ticker=symbol, limit=1000)
+        metrics = list_backtest_metrics(connection, ticker=symbol, limit=1000)
+    LOGGER.info(
+        "DB read table=backtest_metrics ticker=%s rows=%s",
+        symbol.strip().upper() if symbol else None,
+        len(metrics),
+    )
+    return metrics
 
 
 def load_latest_sync_run(symbol: str) -> pd.Series | None:
     init_database()
     with get_connection() as connection:
         recent_runs = get_recent_sync_runs(connection, ticker=symbol, limit=1)
+    LOGGER.info(
+        "DB read table=sync_runs ticker=%s rows=%s limit=1",
+        symbol.strip().upper(),
+        len(recent_runs),
+    )
     if recent_runs.empty:
         return None
     return recent_runs.iloc[0]
@@ -98,6 +128,13 @@ def save_backtest_result(
         )
         record_backtest_metrics(connection, run_id, metrics)
         connection.commit()
+    LOGGER.info(
+        "DB write tables=backtest_runs,backtest_metrics ticker=%s run_id=%s "
+        "metric_rows=%s",
+        symbol.strip().upper(),
+        run_id,
+        len(metrics),
+    )
     return run_id
 
 
@@ -112,7 +149,7 @@ def save_manual_event(
 ) -> None:
     init_database()
     with get_connection() as connection:
-        add_event(
+        event_id = add_event(
             connection,
             name=name,
             event_date=event_date,
@@ -123,10 +160,18 @@ def save_manual_event(
             notes=notes,
         )
         connection.commit()
+    LOGGER.info(
+        "DB write table=events ticker=%s event_id=%s category=%s event_date=%s",
+        ticker.strip().upper(),
+        event_id,
+        category,
+        event_date,
+    )
 
 
 def remove_event(event_id: int) -> None:
     init_database()
     with get_connection() as connection:
-        delete_event(connection, event_id)
+        deleted = delete_event(connection, event_id)
         connection.commit()
+    LOGGER.info("DB write table=events delete event_id=%s deleted=%s", event_id, deleted)

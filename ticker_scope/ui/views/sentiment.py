@@ -12,11 +12,15 @@ from ticker_scope.data.repositories import (
     upsert_fear_greed_index,
 )
 from ticker_scope.formatting import format_date_range, latest_sync_label
+from ticker_scope.observability import get_logger
 from ticker_scope.sentiment.sync import sync_fear_greed_index
 from ticker_scope.ui.data_access import (
     cached_fear_greed_status,
     clear_cached_fear_greed,
 )
+
+
+LOGGER = get_logger(__name__)
 
 
 def render_sentiment_tab() -> None:
@@ -107,6 +111,11 @@ def _render_manual_entry_form() -> None:
     with get_connection() as connection:
         stored_rows = upsert_fear_greed_index(connection, data, source="manual")
         connection.commit()
+    LOGGER.info(
+        "DB write table=fear_greed_index source=manual rows=%s index_date=%s",
+        stored_rows,
+        entry_date,
+    )
     clear_cached_fear_greed()
     st.success(f"Saved {stored_rows} manual Fear & Greed value.")
 
@@ -137,6 +146,10 @@ def _render_csv_import_form() -> None:
                 source="csv_import",
             )
             connection.commit()
+        LOGGER.info(
+            "DB write table=fear_greed_index source=csv_import rows=%s",
+            stored_rows,
+        )
         clear_cached_fear_greed()
         st.success(f"Imported {stored_rows} Fear & Greed values.")
 
@@ -156,6 +169,11 @@ def _render_delete_form(values: pd.DataFrame) -> None:
         with get_connection() as connection:
             deleted = delete_fear_greed_value(connection, int(selected_id))
             connection.commit()
+        LOGGER.info(
+            "DB write table=fear_greed_index delete value_id=%s deleted=%s",
+            selected_id,
+            deleted,
+        )
         clear_cached_fear_greed()
         if deleted:
             st.success(f"Deleted Fear & Greed value #{selected_id}.")

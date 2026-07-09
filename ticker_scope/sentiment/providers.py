@@ -7,9 +7,11 @@ from typing import Protocol
 import pandas as pd
 
 from ticker_scope.data.repositories import classify_fear_greed_value
+from ticker_scope.observability import get_logger
 
 
 CNN_FEAR_GREED_SOURCE = "cnn_api"
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -36,12 +38,21 @@ class CnnFearGreedClient:
                 "Install project requirements before syncing CNN Fear & Greed data."
             ) from exc
 
+        LOGGER.info(
+            "API request provider=cnn_fear_greed package=fear_greed.get_history last=%s",
+            last,
+        )
         try:
             raw_history = fear_greed.get_history(last=last)
         except TypeError:
             raw_history = fear_greed.get_history(last)
 
-        return normalize_cnn_fear_greed_history(raw_history)
+        history = normalize_cnn_fear_greed_history(raw_history)
+        LOGGER.info(
+            "API parsed provider=cnn_fear_greed rows=%s",
+            len(history),
+        )
+        return history
 
 
 def normalize_cnn_fear_greed_history(raw_history) -> pd.DataFrame:

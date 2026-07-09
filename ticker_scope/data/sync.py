@@ -16,6 +16,10 @@ from ticker_scope.data.repositories import (
     record_sync_run,
     upsert_daily_prices,
 )
+from ticker_scope.observability import get_logger
+
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,15 @@ def sync_price_history(
         raise ValueError("Ticker symbol is required.")
     effective_date_policy = resolve_date_policy_for_symbol(symbol, date_policy)
 
+    LOGGER.info(
+        "Sync start source=yfinance ticker=%s period=%s interval=%s "
+        "force_refresh=%s date_policy=%s",
+        symbol,
+        period,
+        interval,
+        force_refresh,
+        effective_date_policy,
+    )
     init_database()
     requested_start = period_to_start_date(period)
     today = date.today()
@@ -61,6 +74,15 @@ def sync_price_history(
             interval=interval,
             adjusted=auto_adjust,
         )
+        LOGGER.info(
+            "DB read table=daily_prices ticker=%s first_stored=%s last_stored=%s "
+            "interval=%s adjusted=%s",
+            symbol,
+            first_stored,
+            last_stored,
+            interval,
+            auto_adjust,
+        )
         missing_ranges = []
         if first_stored is not None and last_stored is not None:
             gap_start = first_stored
@@ -76,6 +98,11 @@ def sync_price_history(
                     adjusted=auto_adjust,
                     min_business_day_run=5,
                     date_policy=effective_date_policy,
+                )
+                LOGGER.info(
+                    "DB read table=daily_prices ticker=%s missing_ranges=%s",
+                    symbol,
+                    len(missing_ranges),
                 )
 
         try:
@@ -93,7 +120,19 @@ def sync_price_history(
             )
 
             sync_messages = []
+            LOGGER.info(
+                "Sync fetch plan source=yfinance ticker=%s request_count=%s",
+                symbol,
+                len(fetch_requests),
+            )
             for fetch_request in fetch_requests:
+                LOGGER.info(
+                    "Sync fetch source=yfinance ticker=%s period=%s start=%s end=%s",
+                    symbol,
+                    fetch_request.period,
+                    fetch_request.start,
+                    fetch_request.end,
+                )
                 downloaded = load_price_history(fetch_request)
                 fetched_rows += len(downloaded)
                 request_stored_rows = upsert_daily_prices(
@@ -104,6 +143,14 @@ def sync_price_history(
                     adjusted=auto_adjust,
                 )
                 stored_rows += request_stored_rows
+                LOGGER.info(
+                    "DB write table=daily_prices ticker=%s rows=%s interval=%s "
+                    "adjusted=%s",
+                    symbol,
+                    request_stored_rows,
+                    interval,
+                    auto_adjust,
+                )
                 sync_messages.append(_sync_message(fetch_request, request_stored_rows))
 
             if sync_messages:
@@ -115,6 +162,15 @@ def sync_price_history(
                 start_date=requested_start,
                 interval=interval,
                 adjusted=auto_adjust,
+            )
+            LOGGER.info(
+                "DB read table=daily_prices ticker=%s rows=%s start_date=%s "
+                "interval=%s adjusted=%s",
+                symbol,
+                len(history),
+                requested_start,
+                interval,
+                auto_adjust,
             )
             if history.empty:
                 raise ValueError(f"No stored price history available for {symbol}.")
@@ -130,9 +186,17 @@ def sync_price_history(
                 started_at=started_at,
                 message=message,
             )
+            LOGGER.info(
+                "DB write table=sync_runs source=yfinance ticker=%s status=success "
+                "row_count=%s message=%s",
+                symbol,
+                stored_rows,
+                message,
+            )
             connection.commit()
 
         except Exception as exc:
+            LOGGER.exception("Sync failed source=yfinance ticker=%s", symbol)
             record_sync_run(
                 connection,
                 source="yfinance",
@@ -143,6 +207,13 @@ def sync_price_history(
                 row_count=stored_rows,
                 started_at=started_at,
                 message=str(exc),
+            )
+            LOGGER.info(
+                "DB write table=sync_runs source=yfinance ticker=%s status=failed "
+                "row_count=%s message=%s",
+                symbol,
+                stored_rows,
+                str(exc),
             )
             connection.commit()
             raise

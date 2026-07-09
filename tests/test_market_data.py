@@ -67,6 +67,32 @@ class MarketDataTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "No price history returned"):
                 load_price_history(MarketDataRequest(symbol="TSLA"))
 
+    def test_load_price_history_logs_yfinance_request(self) -> None:
+        raw_history = pd.DataFrame(
+            {"Close": [11.0]},
+            index=pd.to_datetime(["2024-01-02"]),
+        )
+
+        with patch(
+            "ticker_scope.data.market_data.yf.download",
+            return_value=raw_history,
+        ):
+            with self.assertLogs("ticker_scope", level="INFO") as logs:
+                load_price_history(
+                    MarketDataRequest(
+                        symbol="tsla",
+                        interval="1d",
+                        start=date(2024, 1, 2),
+                        end=date(2024, 1, 4),
+                    )
+                )
+
+        output = "\n".join(logs.output)
+        self.assertIn("provider=yfinance", output)
+        self.assertIn("ticker=TSLA", output)
+        self.assertIn("start=2024-01-02", output)
+        self.assertIn("rows=1", output)
+
 
 if __name__ == "__main__":
     unittest.main()

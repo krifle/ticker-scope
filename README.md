@@ -63,6 +63,25 @@ python -m coverage report
 TICKER_SCOPE_DB_PATH=data/my_experiment.sqlite3 streamlit run app.py
 ```
 
+## 터미널 로그
+
+앱은 기본적으로 `INFO` 레벨 로그를 터미널에 출력합니다. 외부 데이터 호출, 가격 동기화, 주요 SQLite 읽기/쓰기 작업이 다음처럼 기록됩니다.
+
+```text
+API request provider=yfinance endpoint=download ticker=TSLA ...
+API request provider=alpha_vantage url=https://www.alphavantage.co/query params={...}
+DB read table=daily_prices ticker=TSLA rows=1250 ...
+DB write table=daily_prices ticker=TSLA rows=5 ...
+```
+
+`yfinance`는 내부 라이브러리가 최종 Yahoo Finance URL을 직접 노출하지 않기 때문에 앱 로그에는 provider, endpoint, ticker, period/start/end 같은 요청 파라미터를 남깁니다. Alpha Vantage처럼 앱이 직접 호출하는 API는 URL과 params를 남기며, API key는 `***`로 마스킹합니다.
+
+더 자세한 로그가 필요하면 실행 전에 `TICKER_SCOPE_LOG_LEVEL`을 지정합니다.
+
+```bash
+TICKER_SCOPE_LOG_LEVEL=DEBUG streamlit run app.py
+```
+
 ## 외부 이벤트 API 설정
 
 실적 발표 캘린더 자동 수집은 Alpha Vantage `EARNINGS_CALENDAR` API를 사용합니다. API key는 다음 중 하나로 설정할 수 있습니다.

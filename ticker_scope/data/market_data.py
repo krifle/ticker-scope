@@ -6,6 +6,10 @@ from dataclasses import dataclass
 import pandas as pd
 import yfinance as yf
 
+from ticker_scope.observability import get_logger
+
+
+LOGGER = get_logger(__name__)
 
 DEFAULT_SYMBOLS = [
     "TSLA",
@@ -68,7 +72,23 @@ def load_price_history(request: MarketDataRequest) -> pd.DataFrame:
     else:
         download_args["period"] = request.period
 
+    LOGGER.info(
+        "API request provider=yfinance endpoint=download ticker=%s interval=%s "
+        "period=%s start=%s end=%s auto_adjust=%s",
+        symbol,
+        request.interval,
+        download_args.get("period"),
+        download_args.get("start"),
+        download_args.get("end"),
+        request.auto_adjust,
+    )
     history = yf.download(**download_args)
+    LOGGER.info(
+        "API response provider=yfinance ticker=%s rows=%s empty=%s",
+        symbol,
+        len(history),
+        history.empty,
+    )
 
     if history.empty:
         raise ValueError(f"No price history returned for {symbol}.")

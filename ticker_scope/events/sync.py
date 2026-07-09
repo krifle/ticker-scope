@@ -17,6 +17,10 @@ from ticker_scope.events.providers import (
     AlphaVantageEarningsClient,
     EarningsCalendarRequest,
 )
+from ticker_scope.observability import get_logger
+
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,13 @@ def sync_earnings_events(
     init_database()
     started_at = _utc_now()
     source = ALPHA_VANTAGE_EARNINGS_SOURCE
+    LOGGER.info(
+        "Sync start source=%s ticker=%s horizon=%s force_refresh=%s",
+        source,
+        symbol,
+        horizon,
+        force_refresh,
+    )
 
     with get_connection() as connection:
         if not force_refresh and _recent_success_exists(
@@ -63,6 +74,13 @@ def sync_earnings_events(
                 row_count=0,
                 started_at=started_at,
                 message=message,
+            )
+            LOGGER.info(
+                "DB write table=sync_runs source=%s ticker=%s status=skipped "
+                "message=%s",
+                source,
+                symbol,
+                message,
             )
             connection.commit()
             return EventSyncResult(
@@ -86,6 +104,14 @@ def sync_earnings_events(
                 connection,
                 events,
             )
+            LOGGER.info(
+                "DB write table=events source=%s ticker=%s inserted_rows=%s "
+                "skipped_duplicates=%s",
+                source,
+                symbol,
+                inserted_rows,
+                skipped_duplicates,
+            )
             message = (
                 f"synced {inserted_rows} events "
                 f"({skipped_duplicates} duplicates skipped)"
@@ -101,6 +127,14 @@ def sync_earnings_events(
                 started_at=started_at,
                 message=message,
             )
+            LOGGER.info(
+                "DB write table=sync_runs source=%s ticker=%s status=success "
+                "row_count=%s message=%s",
+                source,
+                symbol,
+                inserted_rows,
+                message,
+            )
             connection.commit()
             return EventSyncResult(
                 fetched_rows=len(events),
@@ -110,6 +144,7 @@ def sync_earnings_events(
                 message=message,
             )
         except Exception as exc:
+            LOGGER.exception("Sync failed source=%s ticker=%s", source, symbol)
             record_sync_run(
                 connection,
                 source=source,
@@ -120,6 +155,13 @@ def sync_earnings_events(
                 row_count=0,
                 started_at=started_at,
                 message=str(exc),
+            )
+            LOGGER.info(
+                "DB write table=sync_runs source=%s ticker=%s status=failed "
+                "message=%s",
+                source,
+                symbol,
+                str(exc),
             )
             connection.commit()
             raise
@@ -198,6 +240,12 @@ def _recent_success_exists(
     min_refresh_hours: int,
 ) -> bool:
     recent_runs = get_recent_sync_runs(connection, ticker=ticker, limit=20)
+    LOGGER.info(
+        "DB read table=sync_runs source=%s ticker=%s rows=%s",
+        source,
+        ticker,
+        len(recent_runs),
+    )
     if recent_runs.empty:
         return False
 

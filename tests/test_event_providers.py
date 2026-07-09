@@ -69,6 +69,30 @@ class EventProviderTests(unittest.TestCase):
         self.assertEqual(params["apikey"], "demo")
         self.assertEqual(events["ticker"].tolist(), ["TSLA"])
 
+    def test_client_logs_request_with_masked_api_key(self) -> None:
+        response = Mock()
+        response.status_code = 200
+        response.text = "symbol,name,reportDate\nTSLA,Tesla Inc,2026-07-22\n"
+        response.raise_for_status = Mock()
+        session = Mock()
+        session.get.return_value = response
+
+        client = AlphaVantageEarningsClient(session=session)
+        with self.assertLogs("ticker_scope", level="INFO") as logs:
+            client.fetch_earnings_calendar(
+                EarningsCalendarRequest(
+                    symbol="tsla",
+                    horizon="6month",
+                    api_key="secret-key",
+                )
+            )
+
+        output = "\n".join(logs.output)
+        self.assertIn("provider=alpha_vantage", output)
+        self.assertIn("url=https://www.alphavantage.co/query", output)
+        self.assertIn("'apikey': '***'", output)
+        self.assertNotIn("secret-key", output)
+
 
 if __name__ == "__main__":
     unittest.main()

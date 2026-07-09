@@ -10,7 +10,11 @@ from ticker_scope.data.repositories import (
     list_fear_greed_values,
 )
 from ticker_scope.data.sync import SyncResult, sync_price_history
+from ticker_scope.observability import get_logger
 from ticker_scope.sentiment.sync import SENTIMENT_SYNC_TICKER
+
+
+LOGGER = get_logger(__name__)
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -40,26 +44,42 @@ def clear_cached_history() -> None:
 def cached_fear_greed_history(start_date=None, end_date=None):
     init_database()
     with get_connection() as connection:
-        return get_fear_greed_history(
+        history = get_fear_greed_history(
             connection,
             start_date=start_date,
             end_date=end_date,
         )
+    LOGGER.info(
+        "DB read table=fear_greed_index rows=%s start_date=%s end_date=%s",
+        len(history),
+        start_date,
+        end_date,
+    )
+    return history
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cached_fear_greed_status():
     init_database()
     with get_connection() as connection:
-        return {
-            "coverage": get_fear_greed_coverage(connection),
-            "recent_sync_runs": get_recent_sync_runs(
-                connection,
-                ticker=SENTIMENT_SYNC_TICKER,
-                limit=10,
-            ),
-            "values": list_fear_greed_values(connection, limit=500),
-        }
+        coverage = get_fear_greed_coverage(connection)
+        recent_sync_runs = get_recent_sync_runs(
+            connection,
+            ticker=SENTIMENT_SYNC_TICKER,
+            limit=10,
+        )
+        values = list_fear_greed_values(connection, limit=500)
+    LOGGER.info(
+        "DB read fear_greed_status coverage_rows=%s recent_sync_runs=%s values=%s",
+        coverage["row_count"],
+        len(recent_sync_runs),
+        len(values),
+    )
+    return {
+        "coverage": coverage,
+        "recent_sync_runs": recent_sync_runs,
+        "values": values,
+    }
 
 
 def clear_cached_fear_greed() -> None:

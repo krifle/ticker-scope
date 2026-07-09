@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from ticker_scope.data.market_data import symbol_label
+from ticker_scope.observability import configure_logging
 from ticker_scope.ui.data_access import clear_cached_history
 from ticker_scope.ui.sidebar import render_sidebar
 from ticker_scope.ui.views.multi import render_multi_ticker_view
@@ -10,6 +11,7 @@ from ticker_scope.ui.views.single import render_single_ticker_view
 
 
 def main() -> None:
+    configure_logging()
     st.set_page_config(page_title="Ticker Scope", layout="wide")
 
     controls = render_sidebar()
