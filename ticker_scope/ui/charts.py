@@ -421,7 +421,7 @@ def make_multi_metric_bar_chart(
     sorted_summary = summary.sort_values(metric, ascending=metric != "coverage")
     fig.add_trace(
         go.Bar(
-            x=sorted_summary["ticker"],
+            x=_ticker_axis_labels(sorted_summary),
             y=sorted_summary[metric],
             marker={"color": "#2563EB"},
             text=sorted_summary[metric].round(2),
@@ -446,7 +446,7 @@ def make_multi_anomaly_chart(summary: pd.DataFrame) -> go.Figure:
     sorted_summary = summary.sort_values("anomaly_rate_pct", ascending=False)
     fig.add_trace(
         go.Bar(
-            x=sorted_summary["ticker"],
+            x=_ticker_axis_labels(sorted_summary),
             y=sorted_summary["anomaly_rate_pct"],
             marker={"color": "#DC2626"},
             text=sorted_summary["anomaly_count"],
@@ -462,6 +462,12 @@ def make_multi_anomaly_chart(summary: pd.DataFrame) -> go.Figure:
         showlegend=False,
     )
     return fig
+
+
+def _ticker_axis_labels(summary: pd.DataFrame) -> pd.Series:
+    if "ticker_label" in summary.columns:
+        return summary["ticker_label"]
+    return summary["ticker"]
 
 
 def make_event_comparison_chart(

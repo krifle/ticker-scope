@@ -10,12 +10,21 @@ from ticker_scope.data.market_data import (
     DEFAULT_SYMBOLS,
     MarketDataRequest,
     load_price_history,
+    symbol_label,
 )
 
 
 class MarketDataTests(unittest.TestCase):
     def test_default_symbols_include_korean_doosan_enerbility(self) -> None:
         self.assertIn("034020.KS", DEFAULT_SYMBOLS)
+        self.assertIn("005930.KS", DEFAULT_SYMBOLS)
+        self.assertIn("000660.KS", DEFAULT_SYMBOLS)
+
+    def test_symbol_label_includes_alias_when_known(self) -> None:
+        self.assertEqual(symbol_label("034020.KS"), "034020.KS · 두산에너빌리티")
+        self.assertEqual(symbol_label("005930.KS"), "005930.KS · 삼성전자")
+        self.assertEqual(symbol_label("000660.KS"), "000660.KS · SK하이닉스")
+        self.assertEqual(symbol_label("tsla"), "TSLA")
 
     def test_load_price_history_normalizes_yfinance_multiindex_response(self) -> None:
         columns = pd.MultiIndex.from_product(

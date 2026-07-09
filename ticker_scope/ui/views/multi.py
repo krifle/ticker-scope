@@ -94,12 +94,12 @@ def render_multi_ticker_view(
     c1.metric("Tickers", f"{len(summary):,}")
     c2.metric(
         "Best MAPE",
-        f"{best_row['ticker']} · {format_metric(best_row['mape'], '%')}",
+        f"{best_row['ticker_label']} · {format_metric(best_row['mape'], '%')}",
     )
     c3.metric(
         "Highest anomaly rate",
         (
-            f"{anomaly_row['ticker']} · "
+            f"{anomaly_row['ticker_label']} · "
             f"{format_metric(anomaly_row['anomaly_rate_pct'], '%')}"
         ),
     )
@@ -134,6 +134,7 @@ def render_multi_ticker_view(
                 anomalies[
                     [
                         "ticker",
+                        "ticker_label",
                         "ds",
                         "y",
                         "yhat",
@@ -155,6 +156,7 @@ def render_multi_ticker_view(
             summary[
                 [
                     "ticker",
+                    "ticker_label",
                     "rows",
                     "fetched_rows",
                     "data_start_date",

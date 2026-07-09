@@ -17,7 +17,15 @@ DEFAULT_SYMBOLS = [
     "NLR",
     "URA",
     "034020.KS",
+    "005930.KS",
+    "000660.KS",
 ]
+
+SYMBOL_ALIASES = {
+    "034020.KS": "두산에너빌리티",
+    "005930.KS": "삼성전자",
+    "000660.KS": "SK하이닉스",
+}
 
 
 @dataclass(frozen=True)
@@ -28,6 +36,18 @@ class MarketDataRequest:
     auto_adjust: bool = True
     start: date | str | None = None
     end: date | str | None = None
+
+
+def symbol_alias(symbol: str) -> str | None:
+    return SYMBOL_ALIASES.get(symbol.strip().upper())
+
+
+def symbol_label(symbol: str) -> str:
+    normalized_symbol = symbol.strip().upper()
+    alias = symbol_alias(normalized_symbol)
+    if alias is None:
+        return normalized_symbol
+    return f"{normalized_symbol} · {alias}"
 
 
 def load_price_history(request: MarketDataRequest) -> pd.DataFrame:

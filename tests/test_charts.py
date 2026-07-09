@@ -158,6 +158,7 @@ class ChartTests(unittest.TestCase):
         summary = pd.DataFrame(
             {
                 "ticker": ["TSLA", "AAPL"],
+                "ticker_label": ["TSLA", "AAPL"],
                 "mape": [12.5, 5.1],
                 "anomaly_rate_pct": [3.0, 1.5],
                 "anomaly_count": [9, 4],
@@ -171,6 +172,29 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(list(metric_fig.data[0].x), ["AAPL", "TSLA"])
         self.assertEqual(len(anomaly_fig.data), 1)
         self.assertEqual(list(anomaly_fig.data[0].x), ["TSLA", "AAPL"])
+
+    def test_multi_ticker_charts_prefer_ticker_labels(self) -> None:
+        summary = pd.DataFrame(
+            {
+                "ticker": ["034020.KS"],
+                "ticker_label": ["034020.KS · 두산에너빌리티"],
+                "mape": [7.5],
+                "anomaly_rate_pct": [2.0],
+                "anomaly_count": [3],
+            }
+        )
+
+        metric_fig = make_multi_metric_bar_chart(summary, metric="mape")
+        anomaly_fig = make_multi_anomaly_chart(summary)
+
+        self.assertEqual(
+            list(metric_fig.data[0].x),
+            ["034020.KS · 두산에너빌리티"],
+        )
+        self.assertEqual(
+            list(anomaly_fig.data[0].x),
+            ["034020.KS · 두산에너빌리티"],
+        )
 
     def test_components_chart_renders_available_components(self) -> None:
         forecast = pd.DataFrame(

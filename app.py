@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ticker_scope.data.market_data import symbol_label
 from ticker_scope.ui.data_access import clear_cached_history
 from ticker_scope.ui.sidebar import render_sidebar
 from ticker_scope.ui.views.multi import render_multi_ticker_view
@@ -14,7 +15,7 @@ def main() -> None:
     controls = render_sidebar()
     st.title("Ticker Scope")
     if controls.analysis_view == "Single ticker":
-        st.header(controls.symbol)
+        st.header(symbol_label(controls.symbol))
 
     try:
         if controls.force_refresh:

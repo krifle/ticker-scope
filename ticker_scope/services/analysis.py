@@ -5,7 +5,7 @@ from collections.abc import Callable
 import pandas as pd
 
 from ticker_scope.date_policy import date_policy_label, resolve_date_policy_for_symbol
-from ticker_scope.data.market_data import to_prophet_frame
+from ticker_scope.data.market_data import symbol_alias, symbol_label, to_prophet_frame
 from ticker_scope.data.sync import SyncResult, sync_price_history
 from ticker_scope.events.calendar import events_to_holidays
 from ticker_scope.formatting import format_sync_time
@@ -130,6 +130,7 @@ def analyze_ticker_for_comparison(
     anomaly_points = anomaly_summary(anomalies).copy()
     if not anomaly_points.empty:
         anomaly_points.insert(0, "ticker", symbol)
+        anomaly_points.insert(1, "ticker_label", symbol_label(symbol))
 
     _, metrics = run_holdout_backtest(
         prophet_df,
@@ -162,6 +163,8 @@ def analyze_ticker_for_comparison(
     return (
         {
             "ticker": symbol,
+            "ticker_alias": symbol_alias(symbol),
+            "ticker_label": symbol_label(symbol),
             "rows": row_count,
             "fetched_rows": sync_result.fetched_rows,
             "latest_date": prophet_df.iloc[-1]["ds"].date(),

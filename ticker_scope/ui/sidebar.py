@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import streamlit as st
 
 from ticker_scope.date_policy import DATE_POLICY_OPTIONS, date_policy_label
-from ticker_scope.data.market_data import DEFAULT_SYMBOLS
+from ticker_scope.data.market_data import DEFAULT_SYMBOLS, symbol_label
 from ticker_scope.ui.helpers import normalize_symbol_list
 
 
@@ -33,7 +33,12 @@ def render_sidebar() -> AppControls:
         )
 
         if analysis_view == "Single ticker":
-            selected_symbol = st.selectbox("Preset", DEFAULT_SYMBOLS, index=0)
+            selected_symbol = st.selectbox(
+                "Preset",
+                DEFAULT_SYMBOLS,
+                index=0,
+                format_func=symbol_label,
+            )
             custom_symbol = st.text_input("Custom ticker", value="").strip().upper()
             symbol = custom_symbol or selected_symbol
             symbols = []
@@ -42,6 +47,7 @@ def render_sidebar() -> AppControls:
                 "Preset tickers",
                 DEFAULT_SYMBOLS,
                 default=DEFAULT_SYMBOLS[:4],
+                format_func=symbol_label,
             )
             custom_symbols_text = st.text_input(
                 "Custom tickers",

@@ -5,6 +5,7 @@ from datetime import date
 import pandas as pd
 
 from ticker_scope.date_policy import date_policy_label
+from ticker_scope.data.market_data import symbol_label
 from ticker_scope.formatting import format_horizon_label
 
 
@@ -85,6 +86,7 @@ def make_saved_backtest_summary(metrics: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     grouped["horizon_label"] = grouped["horizon_days"].apply(format_horizon_label)
+    grouped["ticker_label"] = grouped["ticker"].apply(symbol_label)
     grouped["horizon_sort"] = grouped["horizon_days"].fillna(0).astype(int)
     grouped["run_label"] = grouped.apply(_make_run_label, axis=1)
     return grouped.sort_values(["run_id", "horizon_sort"], ascending=[False, True])
@@ -140,6 +142,6 @@ def _make_run_label(row: pd.Series) -> str:
     event_label = "events" if bool(row["use_events"]) else "no events"
     date_label = date_policy_label(str(row.get("date_policy", "")))
     return (
-        f"#{int(row['run_id'])} {row['ticker']} {row['strategy']} "
+        f"#{int(row['run_id'])} {symbol_label(str(row['ticker']))} {row['strategy']} "
         f"{row['period']} {event_label} {date_label} {created_at}"
     )
