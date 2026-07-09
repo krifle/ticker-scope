@@ -7,6 +7,7 @@ import unittest
 
 import pandas as pd
 
+from ticker_scope.date_policy import AUTO_BY_TICKER, KOREA_STOCK_MARKET
 from ticker_scope.data.database import (
     CURRENT_SCHEMA_VERSION,
     get_connection,
@@ -152,6 +153,42 @@ class DataStorageTests(unittest.TestCase):
                     start_date=date(2024, 3, 28),
                     end_date=date(2024, 4, 1),
                     min_business_day_run=1,
+                )
+
+            self.assertEqual(coverage.missing_business_days, 0)
+            self.assertEqual(coverage.longest_missing_business_day_run, 0)
+            self.assertEqual(missing_ranges, [])
+
+    def test_korea_stock_coverage_uses_korean_market_holidays(self) -> None:
+        history = pd.DataFrame(
+            {
+                "Date": ["2025-04-30", "2025-05-02", "2025-05-07"],
+                "Close": [10.0, 11.0, 12.0],
+                "Volume": [100, 200, 300],
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "ticker_scope.sqlite3"
+            init_database(db_path)
+
+            with get_connection(db_path) as connection:
+                upsert_daily_prices(connection, "034020.KS", history)
+                coverage = get_price_coverage(
+                    connection,
+                    "034020.KS",
+                    start_date=date(2025, 4, 30),
+                    end_date=date(2025, 5, 7),
+                    today=date(2025, 5, 8),
+                    date_policy=KOREA_STOCK_MARKET,
+                )
+                missing_ranges = find_missing_price_ranges(
+                    connection,
+                    "034020.KS",
+                    start_date=date(2025, 4, 30),
+                    end_date=date(2025, 5, 7),
+                    min_business_day_run=1,
+                    date_policy=AUTO_BY_TICKER,
                 )
 
             self.assertEqual(coverage.missing_business_days, 0)

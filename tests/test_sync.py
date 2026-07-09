@@ -20,6 +20,12 @@ class FixedDate(date):
         return cls(2024, 1, 5)
 
 
+class KoreanHolidayWeekDate(date):
+    @classmethod
+    def today(cls) -> date:
+        return cls(2025, 10, 11)
+
+
 class SyncTests(unittest.TestCase):
     def test_build_fetch_requests_merges_overlapping_ranges(self) -> None:
         requests = sync._build_fetch_requests(
@@ -86,6 +92,34 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(len(sync_runs), 2)
             self.assertEqual(sync_runs["status"].tolist(), ["success", "success"])
             self.assertEqual(sync_runs.iloc[0]["message"], "cache hit")
+
+    def test_sync_uses_korean_market_calendar_for_missing_ranges(self) -> None:
+        stored_history = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2025-10-02", "2025-10-10"]),
+                "Close": [10.0, 11.0],
+                "Volume": [100, 200],
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "ticker_scope.sqlite3"
+            init_database(db_path)
+            with get_connection(db_path) as connection:
+                sync.upsert_daily_prices(connection, "034020.KS", stored_history)
+                connection.commit()
+
+            with patch.dict("os.environ", {"TICKER_SCOPE_DB_PATH": str(db_path)}), patch.object(
+                sync,
+                "date",
+                KoreanHolidayWeekDate,
+            ), patch.object(sync, "load_price_history") as load_price_history:
+                result = sync.sync_price_history("034020.KS", period="max")
+
+            load_price_history.assert_not_called()
+            self.assertTrue(result.from_cache)
+            self.assertEqual(result.message, "cache hit")
+            self.assertEqual(len(result.history), 2)
 
     def test_merge_fetch_requests_keeps_period_request_unmerged(self) -> None:
         period_request = MarketDataRequest(symbol="TSLA", period="max", start=None, end=None)

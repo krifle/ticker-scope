@@ -7,7 +7,17 @@ import pandas as pd
 import yfinance as yf
 
 
-DEFAULT_SYMBOLS = ["TSLA", "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "NLR", "URA"]
+DEFAULT_SYMBOLS = [
+    "TSLA",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "GOOGL",
+    "AMZN",
+    "NLR",
+    "URA",
+    "034020.KS",
+]
 
 
 @dataclass(frozen=True)

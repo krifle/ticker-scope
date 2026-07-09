@@ -14,6 +14,7 @@ from ticker_scope.date_policy import (
     expected_dates_between,
     normalize_date_policy,
     next_expected_date,
+    resolve_date_policy_for_symbol,
 )
 
 
@@ -365,6 +366,7 @@ def get_price_coverage(
     today: date | None = None,
     date_policy: str = US_STOCK_MARKET,
 ) -> PriceCoverage:
+    effective_date_policy = resolve_date_policy_for_symbol(ticker, date_policy)
     query = """
         SELECT
           COUNT(*) AS row_count,
@@ -409,7 +411,7 @@ def get_price_coverage(
             dates,
             coverage_start,
             coverage_end,
-            date_policy=date_policy,
+            date_policy=effective_date_policy,
         )
 
     freshness_days = None
@@ -439,6 +441,7 @@ def find_missing_price_ranges(
     min_business_day_run: int = 5,
     date_policy: str = US_STOCK_MARKET,
 ) -> list[tuple[date, date, int]]:
+    effective_date_policy = resolve_date_policy_for_symbol(ticker, date_policy)
     dates = get_price_dates(
         connection,
         ticker=ticker,
@@ -451,7 +454,7 @@ def find_missing_price_ranges(
         dates,
         start_date,
         end_date,
-        date_policy=date_policy,
+        date_policy=effective_date_policy,
     )
     return [
         (run[0], run[-1], len(run))
@@ -862,6 +865,10 @@ def record_backtest_run(
     normalized_ticker = ticker.strip().upper()
     if not normalized_ticker:
         raise ValueError("Ticker is required.")
+    effective_date_policy = resolve_date_policy_for_symbol(
+        normalized_ticker,
+        date_policy,
+    )
 
     upsert_symbol(connection, normalized_ticker)
     cursor = connection.execute(
@@ -887,7 +894,7 @@ def record_backtest_run(
             float(interval_width),
             int(use_events),
             int(event_count),
-            normalize_date_policy(date_policy),
+            effective_date_policy,
             int(row_count),
             _optional_date_string(data_start_date),
             _optional_date_string(data_end_date),

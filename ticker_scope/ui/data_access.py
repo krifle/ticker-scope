@@ -14,13 +14,19 @@ from ticker_scope.sentiment.sync import SENTIMENT_SYNC_TICKER
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def cached_history(symbol: str, period: str, force_refresh: bool) -> SyncResult:
+def cached_history(
+    symbol: str,
+    period: str,
+    force_refresh: bool,
+    date_policy: str,
+) -> SyncResult:
     return sync_price_history(
         symbol=symbol,
         period=period,
         interval="1d",
         auto_adjust=True,
         force_refresh=force_refresh,
+        date_policy=date_policy,
     )
 
 

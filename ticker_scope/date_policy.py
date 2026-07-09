@@ -10,11 +10,20 @@ import pandas as pd
 
 CALENDAR_DAY = "calendar_day"
 US_STOCK_MARKET = "us_stock_market"
+KOREA_STOCK_MARKET = "korea_stock_market"
+AUTO_BY_TICKER = "auto_by_ticker"
 
-DATE_POLICY_OPTIONS = (US_STOCK_MARKET, CALENDAR_DAY)
+DATE_POLICY_OPTIONS = (
+    AUTO_BY_TICKER,
+    US_STOCK_MARKET,
+    KOREA_STOCK_MARKET,
+    CALENDAR_DAY,
+)
 
 DATE_POLICY_LABELS = {
+    AUTO_BY_TICKER: "Auto by ticker",
     US_STOCK_MARKET: "US stock trading days",
+    KOREA_STOCK_MARKET: "Korea stock trading days",
     CALENDAR_DAY: "Daily calendar days",
 }
 
@@ -35,6 +44,10 @@ def normalize_date_policy(value: str | None) -> str:
         "calendar": CALENDAR_DAY,
         "calendar_day": CALENDAR_DAY,
         "calendar_days": CALENDAR_DAY,
+        "auto": AUTO_BY_TICKER,
+        "auto_by_ticker": AUTO_BY_TICKER,
+        "symbol": AUTO_BY_TICKER,
+        "ticker": AUTO_BY_TICKER,
         "stock": US_STOCK_MARKET,
         "market": US_STOCK_MARKET,
         "trading": US_STOCK_MARKET,
@@ -43,10 +56,30 @@ def normalize_date_policy(value: str | None) -> str:
         "us_stock_market": US_STOCK_MARKET,
         "us_market": US_STOCK_MARKET,
         "nyse": US_STOCK_MARKET,
+        "korea_stock": KOREA_STOCK_MARKET,
+        "korea_stock_market": KOREA_STOCK_MARKET,
+        "kr_stock": KOREA_STOCK_MARKET,
+        "kr_market": KOREA_STOCK_MARKET,
+        "korean_stock": KOREA_STOCK_MARKET,
+        "korean_market": KOREA_STOCK_MARKET,
+        "krx": KOREA_STOCK_MARKET,
+        "kospi": KOREA_STOCK_MARKET,
+        "kosdaq": KOREA_STOCK_MARKET,
     }
     if normalized in aliases:
         return aliases[normalized]
     raise ValueError(f"Unsupported date policy: {value}")
+
+
+def resolve_date_policy_for_symbol(symbol: str, date_policy: str | None) -> str:
+    policy = normalize_date_policy(date_policy)
+    if policy != AUTO_BY_TICKER:
+        return policy
+
+    normalized_symbol = symbol.strip().upper()
+    if normalized_symbol.endswith((".KS", ".KQ")):
+        return KOREA_STOCK_MARKET
+    return US_STOCK_MARKET
 
 
 def make_future_dataframe(
@@ -107,7 +140,7 @@ def make_future_dates(
     current = last_timestamp
     while len(dates) < periods:
         current += pd.Timedelta(days=1)
-        if is_us_stock_trading_day(current):
+        if is_stock_trading_day(current, policy):
             dates.append(current)
     return pd.Series(dates, dtype="datetime64[ns]")
 
@@ -127,7 +160,7 @@ def expected_dates_between(
     if policy == CALENDAR_DAY:
         return [item.date() for item in dates]
 
-    return [item.date() for item in dates if is_us_stock_trading_day(item)]
+    return [item.date() for item in dates if is_stock_trading_day(item, policy)]
 
 
 def next_expected_date(
@@ -138,8 +171,24 @@ def next_expected_date(
     current = _normalize_timestamp(value)
     while True:
         current += pd.Timedelta(days=1)
-        if policy == CALENDAR_DAY or is_us_stock_trading_day(current):
+        if policy == CALENDAR_DAY or is_stock_trading_day(current, policy):
             return current.date()
+
+
+def is_stock_trading_day(
+    value: date | datetime | pd.Timestamp,
+    date_policy: str,
+) -> bool:
+    policy = normalize_date_policy(date_policy)
+    if policy == US_STOCK_MARKET:
+        return is_us_stock_trading_day(value)
+    if policy == KOREA_STOCK_MARKET:
+        return is_korea_stock_trading_day(value)
+    if policy == AUTO_BY_TICKER:
+        raise ValueError("Auto date policy requires a ticker symbol.")
+    if policy == CALENDAR_DAY:
+        return True
+    raise ValueError(f"Unsupported date policy: {date_policy}")
 
 
 def is_us_stock_trading_day(value: date | datetime | pd.Timestamp) -> bool:
@@ -149,9 +198,25 @@ def is_us_stock_trading_day(value: date | datetime | pd.Timestamp) -> bool:
     return normalized not in _nyse_holiday_dates((normalized.year,))
 
 
+def is_korea_stock_trading_day(value: date | datetime | pd.Timestamp) -> bool:
+    normalized = _normalize_timestamp(value).date()
+    if normalized.weekday() >= 5:
+        return False
+    return normalized not in _korea_stock_holiday_dates((normalized.year,))
+
+
 @lru_cache(maxsize=16)
 def _nyse_holiday_dates(years: tuple[int, ...]) -> set[date]:
     return set(holidays.financial_holidays("NYSE", years=years).keys())
+
+
+@lru_cache(maxsize=16)
+def _korea_stock_holiday_dates(years: tuple[int, ...]) -> set[date]:
+    holiday_dates = set(holidays.country_holidays("KR", years=years).keys())
+    for year in years:
+        holiday_dates.add(date(year, 5, 1))
+        holiday_dates.add(date(year, 12, 31))
+    return holiday_dates
 
 
 def _normalize_datetime_series(values: Iterable[object]) -> pd.Series:

@@ -6,10 +6,17 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from ticker_scope.data.market_data import MarketDataRequest, load_price_history
+from ticker_scope.data.market_data import (
+    DEFAULT_SYMBOLS,
+    MarketDataRequest,
+    load_price_history,
+)
 
 
 class MarketDataTests(unittest.TestCase):
+    def test_default_symbols_include_korean_doosan_enerbility(self) -> None:
+        self.assertIn("034020.KS", DEFAULT_SYMBOLS)
+
     def test_load_price_history_normalizes_yfinance_multiindex_response(self) -> None:
         columns = pd.MultiIndex.from_product(
             [["Open", "High", "Low", "Close", "Volume"], ["TSLA"]]

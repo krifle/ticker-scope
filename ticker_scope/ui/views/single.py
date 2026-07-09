@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ticker_scope.date_policy import date_policy_label
+from ticker_scope.date_policy import date_policy_label, resolve_date_policy_for_symbol
 from ticker_scope.data.market_data import to_prophet_frame
 from ticker_scope.events.calendar import events_to_holidays
 from ticker_scope.modeling.anomalies import anomaly_summary, detect_interval_anomalies
@@ -34,19 +34,25 @@ def render_single_ticker_view(
     run_backtest: bool,
     force_refresh: bool,
 ) -> None:
-    sync_result = cached_history(symbol, period, force_refresh)
+    effective_date_policy = resolve_date_policy_for_symbol(symbol, date_policy)
+    sync_result = cached_history(
+        symbol,
+        period,
+        force_refresh,
+        effective_date_policy,
+    )
     db_events = load_model_events(symbol)
     db_event_holidays = events_to_holidays(db_events)
     active_holidays = db_event_holidays if use_events else None
     history = sync_result.history
     prophet_df = to_prophet_frame(history)
-    storage_status = load_storage_status(symbol, period, date_policy)
+    storage_status = load_storage_status(symbol, period, effective_date_policy)
     _, forecast = fit_and_forecast(
         prophet_df,
         periods=forecast_days,
         holidays=active_holidays,
         interval_width=interval_width,
-        date_policy=date_policy,
+        date_policy=effective_date_policy,
     )
     baseline_forecast = None
     comparison_event_forecast = forecast
@@ -57,7 +63,7 @@ def render_single_ticker_view(
                 periods=forecast_days,
                 holidays=None,
                 interval_width=interval_width,
-                date_policy=date_policy,
+                date_policy=effective_date_policy,
             )
         else:
             baseline_forecast = forecast
@@ -66,7 +72,7 @@ def render_single_ticker_view(
                 periods=forecast_days,
                 holidays=db_event_holidays,
                 interval_width=interval_width,
-                date_policy=date_policy,
+                date_policy=effective_date_policy,
             )
     anomalies = detect_interval_anomalies(prophet_df, forecast)
     anomaly_points = anomaly_summary(anomalies)
@@ -88,7 +94,7 @@ def render_single_ticker_view(
         f"Local DB: {sync_result.message} "
         f"({len(history):,} rows available, fetched {sync_result.fetched_rows:,}) · "
         f"Events used: {0 if active_holidays is None else len(active_holidays):,} · "
-        f"Date handling: {date_policy_label(date_policy)}"
+        f"Date handling: {date_policy_label(effective_date_policy)}"
     )
 
     tabs = st.tabs(
@@ -133,7 +139,7 @@ def render_single_ticker_view(
             active_holidays=active_holidays,
             interval_width=interval_width,
             use_events=use_events,
-            date_policy=date_policy,
+            date_policy=effective_date_policy,
         )
 
     with tabs[2]:
@@ -154,7 +160,7 @@ def render_single_ticker_view(
             active_holidays=active_holidays,
             interval_width=interval_width,
             use_events=use_events,
-            date_policy=date_policy,
+            date_policy=effective_date_policy,
             run_backtest=run_backtest,
         )
 
@@ -171,4 +177,4 @@ def render_single_ticker_view(
         render_sentiment_tab()
 
     with tabs[6]:
-        render_data_tab(symbol, period, history, date_policy, storage_status)
+        render_data_tab(symbol, period, history, effective_date_policy, storage_status)

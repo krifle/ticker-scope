@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 import pandas as pd
 
-from ticker_scope.date_policy import date_policy_label
+from ticker_scope.date_policy import date_policy_label, resolve_date_policy_for_symbol
 from ticker_scope.data.market_data import to_prophet_frame
 from ticker_scope.data.sync import SyncResult, sync_price_history
 from ticker_scope.events.calendar import events_to_holidays
@@ -22,18 +22,24 @@ from ticker_scope.services.storage import (
 )
 
 
-HistoryLoader = Callable[[str, str, bool], SyncResult]
+HistoryLoader = Callable[[str, str, bool, str], SyncResult]
 ProgressCallback = Callable[[int, int], None]
 StatusCallback = Callable[[str, int, int], None]
 
 
-def load_synced_history(symbol: str, period: str, force_refresh: bool) -> SyncResult:
+def load_synced_history(
+    symbol: str,
+    period: str,
+    force_refresh: bool,
+    date_policy: str,
+) -> SyncResult:
     return sync_price_history(
         symbol=symbol,
         period=period,
         interval="1d",
         auto_adjust=True,
         force_refresh=force_refresh,
+        date_policy=date_policy,
     )
 
 
@@ -103,8 +109,9 @@ def analyze_ticker_for_comparison(
     save_results: bool,
     history_loader: HistoryLoader | None = None,
 ) -> tuple[dict[str, object], pd.DataFrame]:
+    effective_date_policy = resolve_date_policy_for_symbol(symbol, date_policy)
     load_history = history_loader or load_synced_history
-    sync_result = load_history(symbol, period, force_refresh)
+    sync_result = load_history(symbol, period, force_refresh, effective_date_policy)
     latest_sync = load_latest_sync_run(symbol)
     events = load_model_events(symbol)
     holidays = events_to_holidays(events)
@@ -117,7 +124,7 @@ def analyze_ticker_for_comparison(
         periods=forecast_days,
         holidays=active_holidays,
         interval_width=interval_width,
-        date_policy=date_policy,
+        date_policy=effective_date_policy,
     )
     anomalies = detect_interval_anomalies(prophet_df, forecast)
     anomaly_points = anomaly_summary(anomalies).copy()
@@ -146,7 +153,7 @@ def analyze_ticker_for_comparison(
             interval_width=interval_width,
             use_events=use_events,
             event_count=event_count,
-            date_policy=date_policy,
+            date_policy=effective_date_policy,
             train_ratio=0.8,
         )
 
@@ -161,7 +168,7 @@ def analyze_ticker_for_comparison(
             "data_start_date": prophet_df.iloc[0]["ds"].date(),
             "latest_close": float(prophet_df.iloc[-1]["y"]),
             "event_count": event_count,
-            "date_policy": date_policy_label(date_policy),
+            "date_policy": date_policy_label(effective_date_policy),
             "last_sync_at": (
                 format_sync_time(latest_sync.get("finished_at"))
                 if latest_sync is not None

@@ -46,7 +46,7 @@ def render_sidebar() -> AppControls:
             custom_symbols_text = st.text_input(
                 "Custom tickers",
                 value="",
-                placeholder="META, NFLX",
+                placeholder="META, NFLX, 034020.KS",
             )
             symbols = normalize_symbol_list(selected_symbols, custom_symbols_text)
             symbol = ""
@@ -60,8 +60,8 @@ def render_sidebar() -> AppControls:
             index=0,
             format_func=date_policy_label,
             help=(
-                "US stock trading days excludes weekends and NYSE holidays. "
-                "Daily calendar days keeps every date for service metrics such as plays."
+                "Auto by ticker uses Korea trading days for .KS/.KQ symbols and "
+                "US trading days for other tickers. Daily calendar days keeps every date."
             ),
         )
         force_refresh = st.button("Sync now", width="stretch")

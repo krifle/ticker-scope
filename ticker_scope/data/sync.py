@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 
+from ticker_scope.date_policy import AUTO_BY_TICKER, resolve_date_policy_for_symbol
 from ticker_scope.data.database import get_connection, init_database
 from ticker_scope.data.market_data import MarketDataRequest, load_price_history
 from ticker_scope.data.repositories import (
@@ -32,10 +33,12 @@ def sync_price_history(
     interval: str = "1d",
     auto_adjust: bool = True,
     force_refresh: bool = False,
+    date_policy: str = AUTO_BY_TICKER,
 ) -> SyncResult:
     symbol = symbol.strip().upper()
     if not symbol:
         raise ValueError("Ticker symbol is required.")
+    effective_date_policy = resolve_date_policy_for_symbol(symbol, date_policy)
 
     init_database()
     requested_start = period_to_start_date(period)
@@ -72,6 +75,7 @@ def sync_price_history(
                     interval=interval,
                     adjusted=auto_adjust,
                     min_business_day_run=5,
+                    date_policy=effective_date_policy,
                 )
 
         try:

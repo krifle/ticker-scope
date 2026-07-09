@@ -4,6 +4,7 @@ from datetime import date
 
 import pandas as pd
 
+from ticker_scope.date_policy import resolve_date_policy_for_symbol
 from ticker_scope.data.database import get_connection, init_database
 from ticker_scope.data.repositories import (
     add_event,
@@ -20,6 +21,7 @@ from ticker_scope.data.sync import period_to_start_date
 
 
 def load_storage_status(symbol: str, period: str, date_policy: str):
+    effective_date_policy = resolve_date_policy_for_symbol(symbol, date_policy)
     init_database()
     with get_connection() as connection:
         return {
@@ -31,7 +33,7 @@ def load_storage_status(symbol: str, period: str, date_policy: str):
                 end_date=date.today(),
                 interval="1d",
                 adjusted=True,
-                date_policy=date_policy,
+                date_policy=effective_date_policy,
             ),
             "recent_sync_runs": get_recent_sync_runs(connection, ticker=symbol, limit=20),
         }
